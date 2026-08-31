@@ -1,17 +1,22 @@
+# Step 1: Import modules for CSV operations, file path checks, and date management.
 import csv
 import os
 from datetime import datetime
 
 
+# Step 2: Define base Transaction class (Parent class for financial transactions).
 class Transaction:
-    """Transaction details"""
+    """Base class for representing general financial transactions."""
 
+    # Step 2.1: Initialize transaction attributes (amount, category, description, date).
     def __init__(self, amount, category, description):
         self.amount = amount
         self.category = category
         self.description = description
+        # Automatically capture today's date in YYYY-MM-DD format
         self.date = datetime.now().strftime("%Y-%m-%d")
 
+    # Step 2.2: Print details of the transaction to console.
     def display(self):
         print(f"Date: {self.date}")
         print(f"Amount: {self.amount}")
@@ -19,13 +24,16 @@ class Transaction:
         print(f"Description: {self.description}")
 
 
+# Step 3: Inherit from Transaction to create Income subclass.
 class Income(Transaction):
-    """Income details"""
+    """Represents an income entry with income-specific attributes."""
 
+    # Step 3.1: Call parent constructor and set the source attribute (e.g., Salary, Freelance).
     def __init__(self, amount, category, description, source):
         super().__init__(amount, category, description)
         self.source = source
 
+    # Step 3.2: Override display method to include income source.
     def display(self):
         print(f"Date: {self.date}")
         print(f"Income: Rs.{self.amount}")
@@ -34,13 +42,16 @@ class Income(Transaction):
         print(f"Description: {self.description}")
 
 
+# Step 4: Inherit from Transaction to create Expense subclass.
 class Expense(Transaction):
-    """Expense details"""
+    """Represents an expense entry with payment method details."""
 
+    # Step 4.1: Call parent constructor and set the payment method attribute (e.g., Cash, UPI, Card).
     def __init__(self, amount, category, description, payment):
         super().__init__(amount, category, description)
         self.payment = payment
 
+    # Step 4.2: Override display method to include payment method.
     def display(self):
         print(f"Date: {self.date}")
         print(f"Expense: Rs.{self.amount}")
@@ -49,23 +60,30 @@ class Expense(Transaction):
         print(f"Description: {self.description}")
 
 
+# Step 5: Define the core FinanceManager class for data persistence and business logic.
 class FinanceManager:
-    """Personal Finance Management"""
+    """Core manager handling transaction lists, budget tracking, and persistent CSV storage."""
 
+    # Step 5.1: Initialize storage structures and auto-initialize data files/load state.
     def __init__(self):
-        self.income = []
-        self.expenses = []
-        self.budget = 0
-        self.budgets = {}
+        self.income = []        # Stores list of Income objects
+        self.expenses = []      # Stores list of Expense objects
+        self.budget = 0         # Active monthly budget
+        self.budgets = {}       # Dictionary mapping YYYY-MM -> budget amount
 
+        # Step 5.1a: Ensure data folder and CSV headers exist
         self.create_files()
+        # Step 5.1b: Load existing data from CSV files into memory
         self.load_data()
 
+    # Step 5.2: Create required directories and CSV files with headers if absent.
     def create_files(self):
 
+        # Step 5.2a: Create 'data' folder if it doesn't exist
         if not os.path.exists("data"):
             os.mkdir("data")
 
+        # Step 5.2b: Create income.csv with column headers
         if not os.path.exists("data/income.csv"):
             with open("data/income.csv", "w", newline="") as file:
                 writer = csv.writer(file)
@@ -77,6 +95,7 @@ class FinanceManager:
                     "description"
                 ])
 
+        # Step 5.2c: Create expenses.csv with column headers
         if not os.path.exists("data/expenses.csv"):
             with open("data/expenses.csv", "w", newline="") as file:
                 writer = csv.writer(file)
@@ -88,6 +107,7 @@ class FinanceManager:
                     "description"
                 ])
 
+        # Step 5.2d: Create transactions.csv with general log headers
         if not os.path.exists("data/transactions.csv"):
             with open("data/transactions.csv", "w", newline="") as file:
                 writer = csv.writer(file)
@@ -99,15 +119,18 @@ class FinanceManager:
                     "description"
                 ])
 
+        # Step 5.2e: Create budgets.csv with month-to-budget mapping headers
         if not os.path.exists("data/budgets.csv"):
             with open("data/budgets.csv", "w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow(["month", "amount"])
 
+    # Step 5.3: Read persistent CSV data and populate in-memory lists/dictionaries.
     def load_data(self):
 
         try:
 
+            # Step 5.3a: Read income entries from data/income.csv
             with open("data/income.csv", "r") as file:
                 reader = csv.DictReader(file)
 
@@ -118,10 +141,10 @@ class FinanceManager:
                         row["description"],
                         row["source"]
                     )
-
                     income.date = row["date"]
                     self.income.append(income)
 
+            # Step 5.3b: Read expense entries from data/expenses.csv
             with open("data/expenses.csv", "r") as file:
                 reader = csv.DictReader(file)
 
@@ -132,15 +155,16 @@ class FinanceManager:
                         row["description"],
                         row["payment"]
                     )
-
                     expense.date = row["date"]
                     self.expenses.append(expense)
 
+            # Step 5.3c: Read budget mappings from data/budgets.csv
             with open("data/budgets.csv", "r") as file:
                 reader = csv.DictReader(file)
                 for row in reader:
                     self.budgets[row["month"]] = float(row["amount"])
 
+            # Step 5.3d: Set current active budget for current YYYY-MM
             current_month = datetime.now().strftime("%Y-%m")
             self.budget = self.budgets.get(current_month, 0)
 
@@ -150,14 +174,17 @@ class FinanceManager:
         except Exception as error:
             print("Error while loading data:", error)
 
+    # Step 5.4: Calculate total income for a target month (YYYY-MM).
     def monthly_income(self, month):
-        """Return income recorded in YYYY-MM month."""
+        """Return total income recorded in specified YYYY-MM month."""
         return sum(item.amount for item in self.income if item.date.startswith(month))
 
+    # Step 5.5: Calculate total expenses for a target month (YYYY-MM).
     def monthly_expense(self, month):
-        """Return expenses recorded in YYYY-MM month."""
+        """Return total expenses recorded in specified YYYY-MM month."""
         return sum(item.amount for item in self.expenses if item.date.startswith(month))
 
+    # Step 5.6: Update monthly budget record in memory and write back to budgets.csv.
     def set_monthly_budget(self, month, amount):
         """Store a positive budget for a YYYY-MM month."""
         if amount <= 0:
@@ -170,39 +197,40 @@ class FinanceManager:
             for budget_month, budget_amount in sorted(self.budgets.items()):
                 writer.writerow([budget_month, budget_amount])
 
+    # Step 5.7: Compute net monthly savings value (Monthly Income - Monthly Expense).
     def monthly_savings_value(self, month):
         return self.monthly_income(month) - self.monthly_expense(month)
 
+    # Step 5.8: Interactively collect income inputs from console and append to CSV logs.
     def add_income(self):
 
         print("\n----- Add Income -----")
 
         try:
 
+            # Step 5.8a: Validate positive amount input
             amount = float(input("Enter income amount: "))
-            if amount <= 0:
-                raise ValueError("Amount must be greater than zero")
-
             if amount <= 0:
                 print("Amount must be greater than 0")
                 return
 
+            # Step 5.8b: Read source, category, and description text
             source = input("Enter income source: ")
             category = input("Enter income category: ")
             description = input("Enter description: ")
 
+            # Step 5.8c: Construct Income instance and append to in-memory list
             income = Income(
                 amount,
                 category,
                 description,
                 source
             )
-
             self.income.append(income)
 
+            # Step 5.8d: Append entry to income.csv
             with open("data/income.csv", "a", newline="") as file:
                 writer = csv.writer(file)
-
                 writer.writerow([
                     income.date,
                     income.amount,
@@ -211,9 +239,9 @@ class FinanceManager:
                     income.description
                 ])
 
+            # Step 5.8e: Append entry to unified transactions.csv log
             with open("data/transactions.csv", "a", newline="") as file:
                 writer = csv.writer(file)
-
                 writer.writerow([
                     income.date,
                     "Income",
@@ -227,18 +255,20 @@ class FinanceManager:
         except ValueError:
             print("Please enter a valid amount.")
 
+    # Step 5.9: Interactively collect expense inputs, category selection, and write to CSV logs.
     def add_expense(self):
 
         print("\n----- Add Expense -----")
 
         try:
 
+            # Step 5.9a: Validate positive amount input
             amount = float(input("Enter expense amount: "))
-
             if amount <= 0:
                 print("Amount must be greater than 0")
                 return
 
+            # Step 5.9b: Prompt category choice selection menu
             print("\nExpense Categories")
             print("1. Food")
             print("2. Transport")
@@ -249,9 +279,7 @@ class FinanceManager:
             print("7. Entertainment")
             print("8. Other")
 
-            category_choice = int(
-                input("Select category: ")
-            )
+            category_choice = int(input("Select category: "))
 
             categories = {
                 1: "Food",
@@ -270,23 +298,22 @@ class FinanceManager:
 
             category = categories[category_choice]
 
+            # Step 5.9c: Read description and payment method
             description = input("Enter description: ")
-            payment = input(
-                "Enter payment method (Cash/UPI/Card): "
-            )
+            payment = input("Enter payment method (Cash/UPI/Card): ")
 
+            # Step 5.9d: Construct Expense instance and append to in-memory list
             expense = Expense(
                 amount,
                 category,
                 description,
                 payment
             )
-
             self.expenses.append(expense)
 
+            # Step 5.9e: Append entry to expenses.csv
             with open("data/expenses.csv", "a", newline="") as file:
                 writer = csv.writer(file)
-
                 writer.writerow([
                     expense.date,
                     expense.amount,
@@ -295,9 +322,9 @@ class FinanceManager:
                     expense.description
                 ])
 
+            # Step 5.9f: Append entry to unified transactions.csv log
             with open("data/transactions.csv", "a", newline="") as file:
                 writer = csv.writer(file)
-
                 writer.writerow([
                     expense.date,
                     "Expense",
@@ -311,6 +338,7 @@ class FinanceManager:
         except ValueError:
             print("Please enter valid input.")
 
+    # Step 5.10: Print all loaded income records.
     def show_income(self):
 
         print("\n----- Income Records -----")
@@ -323,6 +351,7 @@ class FinanceManager:
             income.display()
             print("-" * 30)
 
+    # Step 5.11: Print all loaded expense records.
     def show_expenses(self):
 
         print("\n----- Expense Records -----")
@@ -335,25 +364,24 @@ class FinanceManager:
             expense.display()
             print("-" * 30)
 
+    # Step 5.12: Console prompt to set current month budget.
     def set_budget(self):
 
         try:
 
-            budget = float(
-                input("Enter monthly budget: ")
-            )
+            budget = float(input("Enter monthly budget: "))
 
             if budget <= 0:
                 print("Budget must be greater than 0.")
                 return
 
             self.set_monthly_budget(datetime.now().strftime("%Y-%m"), budget)
-
             print("Monthly budget set successfully.")
 
         except ValueError:
             print("Please enter a valid budget.")
 
+    # Step 5.13: Output currently loaded active budget amount.
     def show_budget(self):
 
         print("\n----- Monthly Budget -----")
@@ -363,24 +391,23 @@ class FinanceManager:
         else:
             print(f"Monthly Budget: Rs.{self.budget}")
 
+    # Step 5.14: Calculate total sum of all income records in memory.
     def total_income(self):
 
         total = 0
-
         for income in self.income:
             total = total + income.amount
-
         return total
 
+    # Step 5.15: Calculate total sum of all expense records in memory.
     def total_expense(self):
 
         total = 0
-
         for expense in self.expenses:
             total = total + expense.amount
-
         return total
 
+    # Step 5.16: Group and sum expenses by category, optionally filtering by month.
     def category_wise_expense(self, month=None):
 
         print("\n----- Category Wise Expenses -----")
@@ -397,30 +424,28 @@ class FinanceManager:
                 continue
 
             category = expense.category
-
             if category in category_data:
                 category_data[category] += expense.amount
             else:
                 category_data[category] = expense.amount
 
         for category in category_data:
-            print(
-                f"{category}: Rs.{category_data[category]}"
-            )
+            print(f"{category}: Rs.{category_data[category]}")
 
+    # Step 5.17: Print overall financial savings summary to console.
     def monthly_savings(self):
 
         print("\n----- Monthly Savings -----")
 
         income = self.total_income()
         expense = self.total_expense()
-
         savings = income - expense
 
         print(f"Total Income: Rs.{income}")
         print(f"Total Expense: Rs.{expense}")
         print(f"Savings: Rs.{savings}")
 
+    # Step 5.18: Find and display the maximum expense record, filtered optionally by month.
     def highest_expense(self, month=None):
 
         print("\n----- Highest Expense -----")
@@ -434,12 +459,12 @@ class FinanceManager:
         highest = expenses[0]
 
         for expense in expenses:
-
             if expense.amount > highest.amount:
                 highest = expense
 
         highest.display()
 
+    # Step 5.19: Compare total expenses against the current active budget and report status.
     def budget_validation(self):
 
         print("\n----- Budget Validation -----")
@@ -455,31 +480,25 @@ class FinanceManager:
 
         if expense > self.budget:
             print("Warning: Budget exceeded.")
-
         else:
             remaining = self.budget - expense
             print("You are within the budget.")
             print(f"Remaining Budget: Rs.{remaining}")
 
+    # Step 5.20: Read and display full transaction history log from data/transactions.csv.
     def transaction_history(self):
 
         print("\n----- Transaction History -----")
 
         try:
 
-            with open(
-                "data/transactions.csv",
-                "r"
-            ) as file:
+            with open("data/transactions.csv", "r") as file:
 
                 reader = csv.DictReader(file)
-
                 count = 0
 
                 for row in reader:
-
                     count = count + 1
-
                     print(
                         f"{row['date']} | "
                         f"{row['type']} | "
@@ -493,3 +512,4 @@ class FinanceManager:
 
         except FileNotFoundError:
             print("Transaction file not found.")
+

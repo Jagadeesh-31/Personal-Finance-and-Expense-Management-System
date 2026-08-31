@@ -1,8 +1,9 @@
+# Step 1: Import core data processing and dashboard libraries.
 import pandas as pd
 import streamlit as st
-
 from pathlib import Path
 
+# Step 2: Define file paths and constants for persistent data storage.
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 INCOME_FILE = DATA_DIR / "income.csv"
@@ -12,24 +13,31 @@ REPORT_FILE = ROOT / "financial_report.csv"
 CURRENCY = "Rs."
 
 
+# Step 3: Define utility function to auto-create directory and CSV files with proper headers.
 def ensure_data_files():
+    """Ensure the data folder and required CSV files exist with proper headers."""
     DATA_DIR.mkdir(exist_ok=True)
 
+    # Create income CSV if non-existent or empty
     if not INCOME_FILE.exists() or INCOME_FILE.stat().st_size == 0:
         pd.DataFrame(columns=["date", "timestamp", "amount", "category", "source", "description"]).to_csv(
             INCOME_FILE, index=False
         )
 
+    # Create expense CSV if non-existent or empty
     if not EXPENSE_FILE.exists() or EXPENSE_FILE.stat().st_size == 0:
         pd.DataFrame(columns=["date", "timestamp", "amount", "category", "payment", "description"]).to_csv(
             EXPENSE_FILE, index=False
         )
 
+    # Create budget CSV if non-existent or empty
     if not BUDGET_FILE.exists() or BUDGET_FILE.stat().st_size == 0:
         pd.DataFrame(columns=["month", "budget"]).to_csv(BUDGET_FILE, index=False)
 
 
+# Step 4: Define data loader functions using pandas DataFrames.
 def load_income():
+    """Load income data from income.csv as a pandas DataFrame."""
     ensure_data_files()
     try:
         df = pd.read_csv(INCOME_FILE)
@@ -39,6 +47,7 @@ def load_income():
 
 
 def load_expenses():
+    """Load expense data from expenses.csv as a pandas DataFrame."""
     ensure_data_files()
     try:
         df = pd.read_csv(EXPENSE_FILE)
@@ -48,6 +57,7 @@ def load_expenses():
 
 
 def load_budget():
+    """Load monthly budget settings from budget.csv as a pandas DataFrame."""
     ensure_data_files()
     try:
         df = pd.read_csv(BUDGET_FILE)
@@ -56,44 +66,55 @@ def load_budget():
     return df if not df.empty else pd.DataFrame(columns=["month", "budget"])
 
 
+# Step 5: Define data saver functions to persist DataFrame changes to disk.
 def save_income(df):
+    """Save updated income DataFrame to income.csv."""
     df.to_csv(INCOME_FILE, index=False)
 
 
 def save_expenses(df):
+    """Save updated expenses DataFrame to expenses.csv."""
     df.to_csv(EXPENSE_FILE, index=False)
 
 
 def save_budget(df):
+    """Save updated budget DataFrame to budget.csv."""
     df.to_csv(BUDGET_FILE, index=False)
 
 
+# Step 6: Define financial aggregate helper functions.
 def total_income():
+    """Calculate the total sum of all recorded income entries."""
     return float(load_income()["amount"].sum()) if "amount" in load_income().columns and not load_income().empty else 0.0
 
 
 def total_expense():
+    """Calculate the total sum of all recorded expense entries."""
     return float(load_expenses()["amount"].sum()) if "amount" in load_expenses().columns and not load_expenses().empty else 0.0
 
 
 def monthly_savings_value():
+    """Compute overall net savings (Total Income - Total Expenses)."""
     return total_income() - total_expense()
 
 
 def get_month_label():
+    """Return the current year-month string formatted as YYYY-MM."""
     return pd.Timestamp.today().strftime("%Y-%m")
 
 
 def display_table(dataframe):
+    """Display a 1-indexed formatted DataFrame table in Streamlit."""
     displayed = dataframe.reset_index(drop=True)
     displayed.index = displayed.index + 1
     st.dataframe(displayed, use_container_width=True)
 
 
+# Step 7: Configure Streamlit page layout and main header.
 st.set_page_config(page_title="Personal Finance Manager", page_icon="💼", layout="wide")
-
 st.title("Personal Finance Management System")
 
+# Step 8: Define menu navigation items and render sidebar radio selector.
 menu_items = [
     "Add Income",
     "Add Expense",
@@ -121,8 +142,12 @@ for index, label in enumerate(menu_items, start=1):
 
 choice = st.sidebar.radio("Select an option", menu)
 
+# Step 9: Initialize storage directory and files.
 ensure_data_files()
 
+# Step 10: Process selected menu option and render corresponding UI views.
+
+# Step 10.1: Add Income Form Handler
 if choice == "1. Add Income":
     with st.form("add_income_form"):
         income_amount = st.number_input("Amount", min_value=0.0, step=100.0)
@@ -145,6 +170,7 @@ if choice == "1. Add Income":
         save_income(df)
         st.success(f"Income of {CURRENCY} {income_amount:,.2f} added successfully.")
 
+# Step 10.2: Add Expense Form Handler
 elif choice == "2. Add Expense":
     with st.form("add_expense_form"):
         expense_amount = st.number_input("Amount", min_value=0.0, step=50.0)
@@ -167,6 +193,7 @@ elif choice == "2. Add Expense":
         save_expenses(df)
         st.success(f"Expense of {CURRENCY} {expense_amount:,.2f} added successfully.")
 
+# Step 10.3: View Income Table Handler
 elif choice == "3. View Income":
     df = load_income()
     if df.empty:
@@ -174,6 +201,7 @@ elif choice == "3. View Income":
     else:
         display_table(df)
 
+# Step 10.4: View Expenses Table Handler
 elif choice == "4. View Expenses":
     df = load_expenses()
     if df.empty:
@@ -181,6 +209,7 @@ elif choice == "4. View Expenses":
     else:
         display_table(df)
 
+# Step 10.5: Set Monthly Budget Handler
 elif choice == "5. Set Monthly Budget":
     budget_value = st.number_input("Monthly budget", min_value=0.0, step=500.0)
     month = st.text_input("Month", value=get_month_label())
@@ -191,6 +220,7 @@ elif choice == "5. Set Monthly Budget":
         save_budget(budget_df)
         st.success(f"Budget saved for {month}: {CURRENCY} {budget_value:,.2f}")
 
+# Step 10.6: View Monthly Budget Handler
 elif choice == "6. View Monthly Budget":
     budget_df = load_budget()
     if budget_df.empty:
@@ -198,6 +228,7 @@ elif choice == "6. View Monthly Budget":
     else:
         display_table(budget_df)
 
+# Step 10.7: Budget Validation Metric Display Handler
 elif choice == "7. Budget Validation":
     budget_df = load_budget()
     if budget_df.empty:
@@ -215,6 +246,7 @@ elif choice == "7. Budget Validation":
             remaining = month_budget - expense_total
             st.success(f"Within budget. Remaining: {CURRENCY} {remaining:,.2f}")
 
+# Step 10.8: Transaction History Log View Handler
 elif choice == "8. Transaction History":
     income_df = load_income()
     expense_df = load_expenses()
@@ -248,6 +280,7 @@ elif choice == "8. Transaction History":
             history = history.sort_values(by="date", ascending=False)
         display_table(history)
 
+# Step 10.9: Category-wise Expense Chart and Summary Handler
 elif choice == "9. Category Wise Expenses":
     df = load_expenses()
     if df.empty:
@@ -257,6 +290,7 @@ elif choice == "9. Category Wise Expenses":
         st.bar_chart(category_summary)
         display_table(category_summary.reset_index().rename(columns={"amount": "total_amount"}))
 
+# Step 10.10: Monthly Savings Metric Handler
 elif choice == "10. Monthly Savings":
     income_total = total_income()
     expense_total = total_expense()
@@ -267,6 +301,7 @@ elif choice == "10. Monthly Savings":
     else:
         st.warning("Your expenses are above your income.")
 
+# Step 10.11: Highest Expense Detail View Handler
 elif choice == "11. Highest Expense":
     df = load_expenses()
     if df.empty:
@@ -281,6 +316,7 @@ elif choice == "11. Highest Expense":
         st.markdown(f"**Transaction Date:** {transaction_time.strftime('%A, %Y-%m-%d')}")
         st.markdown(f"**Transaction Time:** {transaction_time.strftime('%I:%M:%S %p')}")
 
+# Step 10.12: Monthly Financial Breakdown Report Handler
 elif choice == "12. Monthly Financial Report":
     income_total = total_income()
     expense_total = total_expense()
@@ -294,6 +330,7 @@ elif choice == "12. Monthly Financial Report":
     )
     display_table(report)
 
+# Step 10.13: Dashboard Key Metrics Summary Handler
 elif choice == "13. Financial Summary":
     income_total = total_income()
     expense_total = total_expense()
@@ -307,6 +344,7 @@ elif choice == "13. Financial Summary":
     col3.metric("Savings", f"{CURRENCY} {savings:,.2f}")
     col4.metric("Budget", f"{CURRENCY} {current_budget:,.2f}")
 
+# Step 10.14: Keyword Search Handler across Income and Expense records
 elif choice == "14. Search Transactions":
     keyword = st.text_input("Search by category, source, payment, or description")
     if keyword:
@@ -329,6 +367,7 @@ elif choice == "14. Search Transactions":
     else:
         st.info("Enter a keyword to search transactions.")
 
+# Step 10.15: Income Record Deletion Handler
 elif choice == "15. Delete Income":
     df = load_income()
     if df.empty:
@@ -341,6 +380,7 @@ elif choice == "15. Delete Income":
             save_income(df)
             st.success("Income record deleted successfully.")
 
+# Step 10.16: Expense Record Deletion Handler
 elif choice == "16. Delete Expense":
     df = load_expenses()
     if df.empty:
@@ -353,6 +393,7 @@ elif choice == "16. Delete Expense":
             save_expenses(df)
             st.success("Expense record deleted successfully.")
 
+# Step 10.17: Savings Goal Checker Handler
 elif choice == "17. Savings Goal":
     goal = st.number_input("Set savings goal", min_value=0.0, step=500.0)
     current_savings = monthly_savings_value()
@@ -363,6 +404,7 @@ elif choice == "17. Savings Goal":
             remaining = goal - current_savings
             st.warning(f"Goal not reached. Remaining amount: {CURRENCY} {remaining:,.2f}")
 
+# Step 10.18: Export Multi-Sheet Excel Financial Report Handler
 elif choice == "18. Export Financial Report":
     income_df = load_income()
     expense_df = load_expenses()
@@ -386,5 +428,7 @@ elif choice == "18. Export Financial Report":
     else:
         st.success(f"Report exported successfully to {REPORT_FILE.with_suffix('.xlsx')}")
 
+# Default Fallback Prompt
 else:
     st.info("Choose an option from the menu to continue.")
+
