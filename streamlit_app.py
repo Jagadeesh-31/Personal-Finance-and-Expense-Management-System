@@ -1,4 +1,5 @@
 # Step 1: Import core data processing and dashboard libraries.
+import io
 import pandas as pd
 import streamlit as st
 from pathlib import Path
@@ -418,15 +419,26 @@ elif choice == "18. Export Financial Report":
     )
 
     try:
-        with pd.ExcelWriter(REPORT_FILE.with_suffix(".xlsx"), engine="openpyxl") as writer:
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             income_df.to_excel(writer, sheet_name="Income", index=False)
             expense_df.to_excel(writer, sheet_name="Expenses", index=False)
             budget_df.to_excel(writer, sheet_name="Budget", index=False)
             summary.to_excel(writer, sheet_name="Summary", index=False)
+
+        # Also save local file on server as backup
+        with open(REPORT_FILE.with_suffix(".xlsx"), "wb") as f:
+            f.write(buffer.getvalue())
+
+        st.success("Report generated successfully!")
+        st.download_button(
+            label="📥 Click Here to Download Financial Report (.xlsx)",
+            data=buffer.getvalue(),
+            file_name="financial_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
     except ModuleNotFoundError:
         st.error("Excel export needs openpyxl. Install it with: pip install -r requirements.txt")
-    else:
-        st.success(f"Report exported successfully to {REPORT_FILE.with_suffix('.xlsx')}")
 
 # Default Fallback Prompt
 else:
