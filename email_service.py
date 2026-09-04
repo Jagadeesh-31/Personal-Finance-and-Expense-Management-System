@@ -260,7 +260,7 @@ def send_monthly_report_email(
     budget_total: float,
 ) -> tuple[bool, str]:
     """Send beautifully formatted HTML Monthly Financial Report email to user."""
-    subject = f"Monthly Financial Statement for {month} - {username}"
+    subject = f"Personal Finance Statement: {month} ({username})"
 
     rem_budget = budget_total - expense_total
     budget_status = f"Under budget by Rs. {rem_budget:,.2f}" if rem_budget >= 0 else f"OVER budget by Rs. {abs(rem_budget):,.2f}"
