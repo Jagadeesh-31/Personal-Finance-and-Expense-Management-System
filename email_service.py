@@ -10,7 +10,7 @@ logger = get_logger("email_service")
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "jagatic3384@gmail.com")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "vtwngrathxatgokz").replace(" ", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USERNAME)
 
 
