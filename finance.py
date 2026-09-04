@@ -1,7 +1,9 @@
-# Step 1: Import modules for CSV operations, file path checks, and date management.
 import csv
 import os
 from datetime import datetime
+from logger_config import get_logger
+
+logger = get_logger("finance")
 
 
 # Step 2: Define base Transaction class (Parent class for financial transactions).
@@ -65,7 +67,18 @@ class FinanceManager:
     """Core manager handling transaction lists, budget tracking, and persistent CSV storage."""
 
     # Step 5.1: Initialize storage structures and auto-initialize data files/load state.
-    def __init__(self):
+    def __init__(self, username="default"):
+        self.username = username
+        if username == "default":
+            self.data_dir = "data"
+        else:
+            self.data_dir = os.path.join("data", "users", username)
+
+        self.income_file = os.path.join(self.data_dir, "income.csv")
+        self.expenses_file = os.path.join(self.data_dir, "expenses.csv")
+        self.transactions_file = os.path.join(self.data_dir, "transactions.csv")
+        self.budgets_file = os.path.join(self.data_dir, "budgets.csv")
+
         self.income = []        # Stores list of Income objects
         self.expenses = []      # Stores list of Expense objects
         self.budget = 0         # Active monthly budget
@@ -79,13 +92,12 @@ class FinanceManager:
     # Step 5.2: Create required directories and CSV files with headers if absent.
     def create_files(self):
 
-        # Step 5.2a: Create 'data' folder if it doesn't exist
-        if not os.path.exists("data"):
-            os.mkdir("data")
+        # Step 5.2a: Create data folder if it doesn't exist
+        os.makedirs(self.data_dir, exist_ok=True)
 
         # Step 5.2b: Create income.csv with column headers
-        if not os.path.exists("data/income.csv"):
-            with open("data/income.csv", "w", newline="") as file:
+        if not os.path.exists(self.income_file):
+            with open(self.income_file, "w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     "date",
@@ -96,8 +108,8 @@ class FinanceManager:
                 ])
 
         # Step 5.2c: Create expenses.csv with column headers
-        if not os.path.exists("data/expenses.csv"):
-            with open("data/expenses.csv", "w", newline="") as file:
+        if not os.path.exists(self.expenses_file):
+            with open(self.expenses_file, "w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     "date",
@@ -108,8 +120,8 @@ class FinanceManager:
                 ])
 
         # Step 5.2d: Create transactions.csv with general log headers
-        if not os.path.exists("data/transactions.csv"):
-            with open("data/transactions.csv", "w", newline="") as file:
+        if not os.path.exists(self.transactions_file):
+            with open(self.transactions_file, "w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     "date",
@@ -120,8 +132,8 @@ class FinanceManager:
                 ])
 
         # Step 5.2e: Create budgets.csv with month-to-budget mapping headers
-        if not os.path.exists("data/budgets.csv"):
-            with open("data/budgets.csv", "w", newline="") as file:
+        if not os.path.exists(self.budgets_file):
+            with open(self.budgets_file, "w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow(["month", "amount"])
 
@@ -130,8 +142,8 @@ class FinanceManager:
 
         try:
 
-            # Step 5.3a: Read income entries from data/income.csv
-            with open("data/income.csv", "r") as file:
+            # Step 5.3a: Read income entries from income.csv
+            with open(self.income_file, "r") as file:
                 reader = csv.DictReader(file)
 
                 for row in reader:
@@ -144,8 +156,8 @@ class FinanceManager:
                     income.date = row["date"]
                     self.income.append(income)
 
-            # Step 5.3b: Read expense entries from data/expenses.csv
-            with open("data/expenses.csv", "r") as file:
+            # Step 5.3b: Read expense entries from expenses.csv
+            with open(self.expenses_file, "r") as file:
                 reader = csv.DictReader(file)
 
                 for row in reader:
@@ -158,8 +170,8 @@ class FinanceManager:
                     expense.date = row["date"]
                     self.expenses.append(expense)
 
-            # Step 5.3c: Read budget mappings from data/budgets.csv
-            with open("data/budgets.csv", "r") as file:
+            # Step 5.3c: Read budget mappings from budgets.csv
+            with open(self.budgets_file, "r") as file:
                 reader = csv.DictReader(file)
                 for row in reader:
                     self.budgets[row["month"]] = float(row["amount"])
@@ -168,10 +180,17 @@ class FinanceManager:
             current_month = datetime.now().strftime("%Y-%m")
             self.budget = self.budgets.get(current_month, 0)
 
+            logger.info(
+                f"[{self.username}] Successfully loaded {len(self.income)} income records, "
+                f"{len(self.expenses)} expense records, and {len(self.budgets)} budget entries."
+            )
+
         except FileNotFoundError:
+            logger.warning(f"[{self.username}] Data files are not available.")
             print("Data files are not available.")
 
         except Exception as error:
+            logger.error(f"[{self.username}] Error while loading data: {error}", exc_info=True)
             print("Error while loading data:", error)
 
     # Step 5.4: Calculate total income for a target month (YYYY-MM).
@@ -188,14 +207,17 @@ class FinanceManager:
     def set_monthly_budget(self, month, amount):
         """Store a positive budget for a YYYY-MM month."""
         if amount <= 0:
+            logger.warning(f"[{self.username}] Attempted to set invalid budget amount: {amount}")
             raise ValueError("Budget must be greater than zero")
         self.budgets[month] = amount
         self.budget = amount
-        with open("data/budgets.csv", "w", newline="") as file:
+        logger.info(f"[{self.username}] Updated monthly budget for {month} to {amount}")
+        with open(self.budgets_file, "w", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(["month", "amount"])
             for budget_month, budget_amount in sorted(self.budgets.items()):
                 writer.writerow([budget_month, budget_amount])
+
 
     # Step 5.7: Compute net monthly savings value (Monthly Income - Monthly Expense).
     def monthly_savings_value(self, month):
@@ -229,7 +251,7 @@ class FinanceManager:
             self.income.append(income)
 
             # Step 5.8d: Append entry to income.csv
-            with open("data/income.csv", "a", newline="") as file:
+            with open(self.income_file, "a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     income.date,
@@ -240,7 +262,7 @@ class FinanceManager:
                 ])
 
             # Step 5.8e: Append entry to unified transactions.csv log
-            with open("data/transactions.csv", "a", newline="") as file:
+            with open(self.transactions_file, "a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     income.date,
@@ -250,9 +272,11 @@ class FinanceManager:
                     income.description
                 ])
 
+            logger.info(f"Recorded income: Rs.{amount}, category: '{category}', source: '{source}'")
             print("Income added successfully.")
 
         except ValueError:
+            logger.warning("Invalid amount entered during income addition.")
             print("Please enter a valid amount.")
 
     # Step 5.9: Interactively collect expense inputs, category selection, and write to CSV logs.
@@ -312,7 +336,7 @@ class FinanceManager:
             self.expenses.append(expense)
 
             # Step 5.9e: Append entry to expenses.csv
-            with open("data/expenses.csv", "a", newline="") as file:
+            with open(self.expenses_file, "a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     expense.date,
@@ -323,7 +347,7 @@ class FinanceManager:
                 ])
 
             # Step 5.9f: Append entry to unified transactions.csv log
-            with open("data/transactions.csv", "a", newline="") as file:
+            with open(self.transactions_file, "a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
                     expense.date,
@@ -479,9 +503,11 @@ class FinanceManager:
         print(f"Total Expense: Rs.{expense}")
 
         if expense > self.budget:
+            logger.warning(f"Budget exceeded! Monthly Budget: Rs.{self.budget}, Total Expense: Rs.{expense}")
             print("Warning: Budget exceeded.")
         else:
             remaining = self.budget - expense
+            logger.info(f"Budget validation passed. Budget: Rs.{self.budget}, Expense: Rs.{expense}, Remaining: Rs.{remaining}")
             print("You are within the budget.")
             print(f"Remaining Budget: Rs.{remaining}")
 
@@ -492,7 +518,7 @@ class FinanceManager:
 
         try:
 
-            with open("data/transactions.csv", "r") as file:
+            with open(self.transactions_file, "r") as file:
 
                 reader = csv.DictReader(file)
                 count = 0

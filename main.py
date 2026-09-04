@@ -1,6 +1,68 @@
-# Step 1: Import required manager and reporting modules.
 from finance import FinanceManager
 from report import FinancialReport
+from logger_config import get_logger
+from auth import UserManager
+
+logger = get_logger("main")
+logger.info("Initializing Personal Finance Management Console System...")
+
+auth_manager = UserManager()
+
+
+def authenticate_cli_user() -> str:
+    """Prompt user for Login, Signup, Forgot Password, or Guest mode in CLI."""
+    print("=" * 45)
+    print(" WELCOME TO PERSONAL FINANCE MANAGEMENT SYSTEM")
+    print("=" * 45)
+    print("1. Log In")
+    print("2. Sign Up")
+    print("3. Forgot Password (OTP Reset)")
+    print("4. Continue as Guest")
+    print("=" * 45)
+
+    while True:
+        choice = input("Select Option (1-4): ").strip()
+        if choice == "1":
+            username = input("Username: ").strip()
+            password = input("Password: ").strip()
+            success, msg, user_info = auth_manager.login(username, password)
+            if success:
+                display_name = user_info.get("full_name") or username
+                print(f"\nWelcome back, {display_name}!")
+                return username
+            else:
+                print(f"\nLogin Failed: {msg}\n")
+        elif choice == "2":
+            username = input("Desired Username: ").strip()
+            full_name = input("Full Name: ").strip()
+            email = input("Email: ").strip()
+            password = input("Password: ").strip()
+            success, msg = auth_manager.signup(username, password, full_name, email)
+            if success:
+                print(f"\n{msg} You can now log in.")
+            else:
+                print(f"\nSignup Failed: {msg}\n")
+        elif choice == "3":
+            print("\n--- FORGOT PASSWORD / OTP RESET ---")
+            identifier = input("Enter your Username or Email: ").strip()
+            success, msg, target_user = auth_manager.request_password_reset_otp(identifier)
+            if not success:
+                print(f"\n{msg}\n")
+            else:
+                print(f"\n{msg}")
+                otp_code = input("Enter 6-digit OTP received in email: ").strip()
+                new_pass = input("Enter New Password: ").strip()
+                res_ok, res_msg = auth_manager.verify_otp_and_reset_password(target_user, otp_code, new_pass)
+                if res_ok:
+                    print(f"\nSUCCESS: {res_msg}\n")
+                else:
+                    print(f"\nRESET FAILED: {res_msg}\n")
+        elif choice == "4":
+            print("\nContinuing in Guest mode...")
+            return "default"
+        else:
+            print("Please select 1, 2, 3, or 4.")
+
 
 # Step 2: Define a dictionary containing the menu option numbers and titles.
 menu_options = {
@@ -26,7 +88,7 @@ def menu():
     """Display the interactive personal finance console menu using the dictionary."""
     print("\n")
     print("=" * 45)
-    print(" PERSONAL FINANCE MANAGEMENT SYSTEM")
+    print(f" PERSONAL FINANCE MANAGEMENT SYSTEM ({current_username.upper()})")
     print("=" * 45)
 
     # Loop through the dictionary items to display menu options step-by-step
@@ -36,12 +98,11 @@ def menu():
     print("=" * 45)
 
 
-
-# Step 3: Instantiate core manager and report objects.
-# - FinanceManager initializes CSV storage files and loads existing transactions.
-# - FinancialReport uses the FinanceManager instance to generate summaries.
-manager = FinanceManager()
+# Step 3: Authenticate user and instantiate core manager and report objects.
+current_username = authenticate_cli_user()
+manager = FinanceManager(username=current_username)
 report = FinancialReport(manager)
+
 
 
 # Step 4: Start the main interactive application loop.
@@ -74,7 +135,7 @@ while True:
 
         elif choice == 5:
             # Prompt user to set a monthly budget threshold
-            manager.set_budget()
+            manager.set_budget() 
 
         elif choice == 6:
             # Display the currently configured monthly budget
@@ -119,8 +180,11 @@ while True:
 
     except ValueError:
         # Handle non-integer input errors safely without crashing
+        logger.warning("Invalid non-integer menu choice entered.")
         print("Please enter a valid number.")
 
     except Exception as error:
         # Catch and report any unexpected errors during operation execution
+        logger.error(f"Unexpected error in CLI loop: {error}", exc_info=True)
         print("Something went wrong:", error)
+

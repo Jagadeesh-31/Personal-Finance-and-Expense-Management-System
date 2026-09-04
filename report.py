@@ -1,5 +1,7 @@
-# Step 1: Import standard datetime module for handling month timestamps.
 from datetime import datetime
+from logger_config import get_logger
+
+logger = get_logger("report")
 
 
 # Step 2: Define the FinancialReport class to generate formatted financial statements.
@@ -13,13 +15,14 @@ class FinancialReport:
     # Step 2.2: Generate and print a comprehensive report for a given month (YYYY-MM).
     def monthly_report(self, month=None):
 
+        # Step 2.2a: Default to current month string (YYYY-MM) if no specific month is passed.
+        month = month or datetime.now().strftime("%Y-%m")
+        logger.info(f"Generating monthly financial report for: {month}")
+
         print("\n")
         print("=" * 45)
         print("       MONTHLY FINANCIAL REPORT")
         print("=" * 45)
-
-        # Step 2.2a: Default to current month string (YYYY-MM) if no specific month is passed.
-        month = month or datetime.now().strftime("%Y-%m")
 
         # Step 2.2b: Retrieve aggregated metrics for the specified month from the manager.
         total_income = self.manager.monthly_income(month)

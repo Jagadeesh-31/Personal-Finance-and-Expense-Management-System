@@ -4,6 +4,8 @@ A Python application for recording income and expenses, managing monthly budgets
 
 ## Features
 
+- User Authentication (Sign Up & Log In with PBKDF2 HMAC SHA-256 password hashing)
+- Multi-user data isolation and personalized tracking per account
 - Add and view income records
 - Add and view expense records
 - Expense categories and payment methods
@@ -15,8 +17,10 @@ A Python application for recording income and expenses, managing monthly budgets
 - Highest-expense identification
 - Monthly financial reports
 - Financial summary
-- Streamlit dashboard with search, delete, savings goal, and Excel export
+- Streamlit dashboard with authentication portal, search, delete, savings goal, and Excel export
+- Centralized logging & Pytest automated test suite
 - Transaction tables with row numbers starting at 1
+
 
 ## Requirements
 

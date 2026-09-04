@@ -1,86 +1,216 @@
-# Step 1: Import core data processing and dashboard libraries.
 import io
 import pandas as pd
 import streamlit as st
 from pathlib import Path
+from logger_config import get_logger
+from auth import UserManager
 
-# Step 2: Define file paths and constants for persistent data storage.
+logger = get_logger("streamlit_app")
+auth_manager = UserManager()
+
+# Step 2: Define base paths and constants
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-INCOME_FILE = DATA_DIR / "income.csv"
-EXPENSE_FILE = DATA_DIR / "expenses.csv"
-BUDGET_FILE = DATA_DIR / "budget.csv"
 REPORT_FILE = ROOT / "financial_report.csv"
 CURRENCY = "Rs."
 
 
+def get_current_user_data_dir() -> Path:
+    """Resolve data directory for logged-in user or fallback."""
+    username = st.session_state.get("username", "default")
+    if not username or username == "default":
+        DATA_DIR.mkdir(exist_ok=True)
+        return DATA_DIR
+    return auth_manager.get_user_data_dir(username)
+
+
+def get_income_file() -> Path:
+    return get_current_user_data_dir() / "income.csv"
+
+
+def get_expense_file() -> Path:
+    return get_current_user_data_dir() / "expenses.csv"
+
+
+def get_budget_file() -> Path:
+    return get_current_user_data_dir() / "budget.csv"
+
+
 # Step 3: Define utility function to auto-create directory and CSV files with proper headers.
 def ensure_data_files():
-    """Ensure the data folder and required CSV files exist with proper headers."""
-    DATA_DIR.mkdir(exist_ok=True)
+    """Ensure the user's data folder and required CSV files exist with proper headers."""
+    user_dir = get_current_user_data_dir()
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    income_path = get_income_file()
+    expense_path = get_expense_file()
+    budget_path = get_budget_file()
 
     # Create income CSV if non-existent or empty
-    if not INCOME_FILE.exists() or INCOME_FILE.stat().st_size == 0:
+    if not income_path.exists() or income_path.stat().st_size == 0:
         pd.DataFrame(columns=["date", "timestamp", "amount", "category", "source", "description"]).to_csv(
-            INCOME_FILE, index=False
+            income_path, index=False
         )
 
     # Create expense CSV if non-existent or empty
-    if not EXPENSE_FILE.exists() or EXPENSE_FILE.stat().st_size == 0:
+    if not expense_path.exists() or expense_path.stat().st_size == 0:
         pd.DataFrame(columns=["date", "timestamp", "amount", "category", "payment", "description"]).to_csv(
-            EXPENSE_FILE, index=False
+            expense_path, index=False
         )
 
     # Create budget CSV if non-existent or empty
-    if not BUDGET_FILE.exists() or BUDGET_FILE.stat().st_size == 0:
-        pd.DataFrame(columns=["month", "budget"]).to_csv(BUDGET_FILE, index=False)
+    if not budget_path.exists() or budget_path.stat().st_size == 0:
+        pd.DataFrame(columns=["month", "budget"]).to_csv(budget_path, index=False)
 
 
 # Step 4: Define data loader functions using pandas DataFrames.
 def load_income():
-    """Load income data from income.csv as a pandas DataFrame."""
+    """Load income data for current user as a pandas DataFrame."""
     ensure_data_files()
+    income_path = get_income_file()
     try:
-        df = pd.read_csv(INCOME_FILE)
-    except pd.errors.EmptyDataError:
+        df = pd.read_csv(income_path)
+    except (pd.errors.EmptyDataError, FileNotFoundError):
         df = pd.DataFrame(columns=["date", "timestamp", "amount", "category", "source", "description"])
     return df if not df.empty else pd.DataFrame(columns=["date", "timestamp", "amount", "category", "source", "description"])
 
 
 def load_expenses():
-    """Load expense data from expenses.csv as a pandas DataFrame."""
+    """Load expense data for current user as a pandas DataFrame."""
     ensure_data_files()
+    expense_path = get_expense_file()
     try:
-        df = pd.read_csv(EXPENSE_FILE)
-    except pd.errors.EmptyDataError:
+        df = pd.read_csv(expense_path)
+    except (pd.errors.EmptyDataError, FileNotFoundError):
         df = pd.DataFrame(columns=["date", "timestamp", "amount", "category", "payment", "description"])
     return df if not df.empty else pd.DataFrame(columns=["date", "timestamp", "amount", "category", "payment", "description"])
 
 
 def load_budget():
-    """Load monthly budget settings from budget.csv as a pandas DataFrame."""
+    """Load monthly budget settings for current user as a pandas DataFrame."""
     ensure_data_files()
+    budget_path = get_budget_file()
     try:
-        df = pd.read_csv(BUDGET_FILE)
-    except pd.errors.EmptyDataError:
+        df = pd.read_csv(budget_path)
+    except (pd.errors.EmptyDataError, FileNotFoundError):
         df = pd.DataFrame(columns=["month", "budget"])
     return df if not df.empty else pd.DataFrame(columns=["month", "budget"])
 
 
 # Step 5: Define data saver functions to persist DataFrame changes to disk.
+def save_excel_report():
+    """Write current user data to financial_report.xlsx with all sheets."""
+    ensure_data_files()
+    income_path = get_income_file()
+    expense_path = get_expense_file()
+    budget_path = get_budget_file()
+
+    try:
+        inc_df = pd.read_csv(income_path)
+    except Exception:
+        inc_df = pd.DataFrame(columns=["date", "timestamp", "amount", "category", "source", "description"])
+
+    try:
+        exp_df = pd.read_csv(expense_path)
+    except Exception:
+        exp_df = pd.DataFrame(columns=["date", "timestamp", "amount", "category", "payment", "description"])
+
+    try:
+        bdg_df = pd.read_csv(budget_path)
+    except Exception:
+        bdg_df = pd.DataFrame(columns=["month", "budget"])
+
+
+    # Normalize dates to YYYY-MM-DD format
+    if not inc_df.empty and "date" in inc_df.columns:
+        inc_df["date"] = pd.to_datetime(inc_df["date"], errors="coerce").dt.strftime("%Y-%m-%d").fillna(inc_df["date"].astype(str))
+    if not exp_df.empty and "date" in exp_df.columns:
+        exp_df["date"] = pd.to_datetime(exp_df["date"], errors="coerce").dt.strftime("%Y-%m-%d").fillna(exp_df["date"].astype(str))
+
+    clean_income = (
+        inc_df[["date", "amount", "category", "source", "description"]]
+        if not inc_df.empty and "source" in inc_df.columns
+        else inc_df
+    )
+    clean_expenses = (
+        exp_df[["date", "amount", "category", "payment", "description"]]
+        if not exp_df.empty and "payment" in exp_df.columns
+        else exp_df
+    )
+
+    all_transactions = []
+    if not inc_df.empty:
+        for _, row in inc_df.iterrows():
+            all_transactions.append({
+                "type": "Income",
+                "date": str(row.get("date", "")),
+                "amount": row.get("amount", 0.0),
+                "category": str(row.get("category", "")),
+                "detail": str(row.get("source", "")),
+                "description": str(row.get("description", "")),
+            })
+    if not exp_df.empty:
+        for _, row in exp_df.iterrows():
+            all_transactions.append({
+                "type": "Expense",
+                "date": str(row.get("date", "")),
+                "amount": row.get("amount", 0.0),
+                "category": str(row.get("category", "")),
+                "detail": str(row.get("payment", "")),
+                "description": str(row.get("description", "")),
+            })
+    history_df = pd.DataFrame(all_transactions)
+    if not history_df.empty:
+        history_df = history_df.sort_values(by="date", ascending=False)
+
+    cat_summary = pd.DataFrame(columns=["category", "total_amount"])
+    if not exp_df.empty and "category" in exp_df.columns:
+        cat_grp = exp_df.groupby("category")["amount"].sum().reset_index()
+        cat_summary = cat_grp.rename(columns={"amount": "total_amount"}).sort_values(by="total_amount", ascending=False)
+
+    tot_inc = float(inc_df["amount"].sum()) if not inc_df.empty and "amount" in inc_df.columns else 0.0
+    tot_exp = float(exp_df["amount"].sum()) if not exp_df.empty and "amount" in exp_df.columns else 0.0
+    tot_savings = tot_inc - tot_exp
+    curr_budget = float(bdg_df["budget"].sum()) if not bdg_df.empty and "budget" in bdg_df.columns else 0.0
+
+    summary = pd.DataFrame(
+        {
+            "Metric": ["Total Income", "Total Expense", "Monthly Savings", "Current Budget"],
+            "Value": [tot_inc, tot_exp, tot_savings, curr_budget],
+        }
+    )
+
+    excel_path = ROOT / "financial_report.xlsx"
+    try:
+        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+            clean_income.to_excel(writer, sheet_name="Income", index=False)
+            clean_expenses.to_excel(writer, sheet_name="Expenses", index=False)
+            bdg_df.to_excel(writer, sheet_name="Budget", index=False)
+            history_df.to_excel(writer, sheet_name="Transactions", index=False)
+            cat_summary.to_excel(writer, sheet_name="Category Expenses", index=False)
+            summary.to_excel(writer, sheet_name="Summary", index=False)
+    except PermissionError:
+        st.warning("'financial_report.xlsx' is currently open in Excel. Please save and close the file in Excel so Streamlit can update it.")
+    except Exception:
+        pass
+
+
 def save_income(df):
-    """Save updated income DataFrame to income.csv."""
-    df.to_csv(INCOME_FILE, index=False)
+    """Save updated income DataFrame for current user."""
+    df.to_csv(get_income_file(), index=False)
+    save_excel_report()
 
 
 def save_expenses(df):
-    """Save updated expenses DataFrame to expenses.csv."""
-    df.to_csv(EXPENSE_FILE, index=False)
+    """Save updated expenses DataFrame for current user."""
+    df.to_csv(get_expense_file(), index=False)
+    save_excel_report()
 
 
 def save_budget(df):
-    """Save updated budget DataFrame to budget.csv."""
-    df.to_csv(BUDGET_FILE, index=False)
+    """Save updated budget DataFrame for current user."""
+    df.to_csv(get_budget_file(), index=False)
+    save_excel_report()
 
 
 # Step 6: Define financial aggregate helper functions.
@@ -111,9 +241,117 @@ def display_table(dataframe):
     st.dataframe(displayed, use_container_width=True)
 
 
-# Step 7: Configure Streamlit page layout and main header.
+# Step 7: Configure Streamlit page layout and authentication session state.
 st.set_page_config(page_title="Personal Finance Manager", page_icon="💼", layout="wide")
-st.title("Personal Finance Management System")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "user_info" not in st.session_state:
+    st.session_state.user_info = {}
+
+# Authentication Portal Gate
+if not st.session_state.authenticated:
+    st.title("🔐 Personal Finance Portal")
+    st.write("Please sign up, log in, or reset your password to manage your personal finance data.")
+
+    tab_login, tab_signup, tab_forgot = st.tabs(["🔑 Log In", "📝 Sign Up", "❓ Forgot Password"])
+
+    with tab_login:
+        st.subheader("Account Login")
+        with st.form("login_form"):
+            login_user = st.text_input("Username")
+            login_pass = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Log In", use_container_width=True)
+
+            if login_btn:
+                success, msg, user_info = auth_manager.login(login_user, login_pass)
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.username = login_user
+                    st.session_state.user_info = user_info
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+    with tab_signup:
+        st.subheader("Create New User Account")
+        with st.form("signup_form"):
+            signup_user = st.text_input("Desired Username")
+            signup_name = st.text_input("Full Name")
+            signup_email = st.text_input("Email Address")
+            signup_pass = st.text_input("Password", type="password")
+            signup_pass_confirm = st.text_input("Confirm Password", type="password")
+            signup_btn = st.form_submit_button("Sign Up", use_container_width=True)
+
+            if signup_btn:
+                if signup_pass != signup_pass_confirm:
+                    st.error("Passwords do not match. Please re-enter your password.")
+                else:
+                    success, msg = auth_manager.signup(signup_user, signup_pass, signup_name, signup_email)
+                    if success:
+                        st.success(msg + " You can now log in using your credentials.")
+                    else:
+                        st.error(msg)
+
+    with tab_forgot:
+        st.subheader("Forgot Password / Reset with OTP")
+        st.write("Enter your registered username or email to receive a 6-digit OTP code.")
+        
+        with st.form("request_otp_form"):
+            reset_identifier = st.text_input("Username or Email Address")
+            send_otp_btn = st.form_submit_button("Send OTP Code", use_container_width=True)
+
+            if send_otp_btn:
+                if not reset_identifier.strip():
+                    st.error("Please enter your username or registered email address.")
+                else:
+                    success, msg, found_username = auth_manager.request_password_reset_otp(reset_identifier)
+                    if success:
+                        st.session_state["otp_target_user"] = found_username
+                        st.success(msg + " Enter the OTP below to set a new password.")
+                    else:
+                        st.error(msg)
+
+        st.markdown("---")
+        st.subheader("Set New Password")
+        with st.form("verify_otp_form"):
+            reset_user = st.text_input("Username or Email Address", value=st.session_state.get("otp_target_user", ""))
+            input_otp = st.text_input("6-Digit OTP Code")
+            new_password = st.text_input("New Password", type="password")
+            new_password_confirm = st.text_input("Confirm New Password", type="password")
+            reset_btn = st.form_submit_button("Reset Password", use_container_width=True)
+
+            if reset_btn:
+                if new_password != new_password_confirm:
+                    st.error("New passwords do not match. Please try again.")
+                else:
+                    success, msg = auth_manager.verify_otp_and_reset_password(reset_user, input_otp, new_password)
+                    if success:
+                        st.success(msg + " You can now log in with your new password.")
+                        if "otp_target_user" in st.session_state:
+                            del st.session_state["otp_target_user"]
+                    else:
+                        st.error(msg)
+
+    st.stop()  # Stop execution here if user is not authenticated
+
+# Logged in UI User Header in Sidebar
+st.sidebar.markdown(f"### 👤 Logged in as")
+display_name = st.session_state.user_info.get("full_name") or st.session_state.username
+st.sidebar.markdown(f"**{display_name}** (`@{st.session_state.username}`)")
+
+if st.sidebar.button("🚪 Logout", use_container_width=True):
+    st.session_state.authenticated = False
+    st.session_state.username = None
+    st.session_state.user_info = {}
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.title(f"Personal Finance Management System - Welcome, {display_name}!")
+
 
 # Step 8: Define menu navigation items and render sidebar radio selector.
 menu_items = [
@@ -151,83 +389,107 @@ ensure_data_files()
 # Step 10.1: Add Income Form Handler
 if choice == "1. Add Income":
     with st.form("add_income_form"):
-        income_amount = st.number_input("Amount", min_value=0.0, step=100.0)
+        income_amount = st.number_input("Amount", value=None, min_value=0.0, step=100.0, placeholder="Enter income amount")
         income_category = st.text_input("Category")
         income_source = st.text_input("Source")
         income_description = st.text_input("Description")
         submitted = st.form_submit_button("Add Income")
 
     if submitted:
-        df = load_income()
-        new_row = {
-            "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
-            "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "amount": income_amount,
-            "category": income_category,
-            "source": income_source,
-            "description": income_description,
-        }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        save_income(df)
-        st.success(f"Income of {CURRENCY} {income_amount:,.2f} added successfully.")
+        if income_amount is None or income_amount <= 0:
+            st.error("Please enter a valid amount greater than 0.")
+        else:
+            df = load_income()
+            new_row = {
+                "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
+                "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "amount": income_amount,
+                "category": income_category,
+                "source": income_source,
+                "description": income_description,
+            }
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            save_income(df)
+            st.success(f"Income of {CURRENCY} {income_amount:,.2f} added successfully.")
 
 # Step 10.2: Add Expense Form Handler
 elif choice == "2. Add Expense":
     with st.form("add_expense_form"):
-        expense_amount = st.number_input("Amount", min_value=0.0, step=50.0)
+        expense_amount = st.number_input("Amount", value=None, min_value=0.0, step=50.0, placeholder="Enter expense amount")
         expense_category = st.text_input("Category")
         expense_payment = st.text_input("Payment Method")
         expense_description = st.text_input("Description")
         submitted = st.form_submit_button("Add Expense")
 
     if submitted:
-        df = load_expenses()
-        new_row = {
-            "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
-            "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "amount": expense_amount,
-            "category": expense_category,
-            "payment": expense_payment,
-            "description": expense_description,
-        }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        save_expenses(df)
-        st.success(f"Expense of {CURRENCY} {expense_amount:,.2f} added successfully.")
+        if expense_amount is None or expense_amount <= 0:
+            st.error("Please enter a valid amount greater than 0.")
+        else:
+            df = load_expenses()
+            new_row = {
+                "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
+                "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "amount": expense_amount,
+                "category": expense_category,
+                "payment": expense_payment,
+                "description": expense_description,
+            }
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            save_expenses(df)
+            st.success(f"Expense of {CURRENCY} {expense_amount:,.2f} added successfully.")
 
-# Step 10.3: View Income Table Handler
+# Step 10.3: View Income Table Handler & Interactive Editor
 elif choice == "3. View Income":
+    st.subheader("View & Modify Income Data")
     df = load_income()
     if df.empty:
         st.info("No income records found.")
     else:
-        display_table(df)
+        st.caption(" Tip: You can double-click cells to modify, add new rows, or select and delete rows.")
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="income_editor")
+        if st.button(" Save Income Modifications"):
+            save_income(edited_df)
+            st.success("Income modifications saved successfully!")
 
-# Step 10.4: View Expenses Table Handler
+# Step 10.4: View Expenses Table Handler & Interactive Editor
 elif choice == "4. View Expenses":
+    st.subheader("View & Modify Expense Data")
     df = load_expenses()
     if df.empty:
         st.info("No expense records found.")
     else:
-        display_table(df)
+        st.caption(" Tip: You can double-click cells to modify, add new rows, or select and delete rows.")
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="expense_editor")
+        if st.button(" Save Expense Modifications"):
+            save_expenses(edited_df)
+            st.success("Expense modifications saved successfully!")
 
 # Step 10.5: Set Monthly Budget Handler
 elif choice == "5. Set Monthly Budget":
-    budget_value = st.number_input("Monthly budget", min_value=0.0, step=500.0)
+    budget_value = st.number_input("Monthly budget", value=None, min_value=0.0, step=500.0, placeholder="Enter monthly budget")
     month = st.text_input("Month", value=get_month_label())
     if st.button("Save Budget"):
-        budget_df = load_budget()
-        budget_df = budget_df[budget_df["month"] != month]
-        budget_df = pd.concat([budget_df, pd.DataFrame([{"month": month, "budget": budget_value}])], ignore_index=True)
-        save_budget(budget_df)
-        st.success(f"Budget saved for {month}: {CURRENCY} {budget_value:,.2f}")
+        if budget_value is None or budget_value <= 0:
+            st.error("Please enter a valid budget amount greater than 0.")
+        else:
+            budget_df = load_budget()
+            budget_df = budget_df[budget_df["month"] != month]
+            budget_df = pd.concat([budget_df, pd.DataFrame([{"month": month, "budget": budget_value}])], ignore_index=True)
+            save_budget(budget_df)
+            st.success(f"Budget saved for {month}: {CURRENCY} {budget_value:,.2f}")
 
-# Step 10.6: View Monthly Budget Handler
+# Step 10.6: View Monthly Budget Handler & Interactive Editor
 elif choice == "6. View Monthly Budget":
+    st.subheader("View & Modify Monthly Budget")
     budget_df = load_budget()
     if budget_df.empty:
         st.info("No monthly budget set yet.")
     else:
-        display_table(budget_df)
+        st.caption(" Tip: Double-click cells to modify monthly budgets.")
+        edited_budget = st.data_editor(budget_df, num_rows="dynamic", use_container_width=True, key="budget_editor")
+        if st.button(" Save Budget Modifications"):
+            save_budget(edited_budget)
+            st.success("Monthly budget modifications saved successfully!")
 
 # Step 10.7: Budget Validation Metric Display Handler
 elif choice == "7. Budget Validation":
@@ -396,14 +658,17 @@ elif choice == "16. Delete Expense":
 
 # Step 10.17: Savings Goal Checker Handler
 elif choice == "17. Savings Goal":
-    goal = st.number_input("Set savings goal", min_value=0.0, step=500.0)
+    goal = st.number_input("Set savings goal", value=None, min_value=0.0, step=500.0, placeholder="Enter target savings goal")
     current_savings = monthly_savings_value()
     if st.button("Check Goal"):
-        if current_savings >= goal:
-            st.success(f"Goal reached. Current savings: {CURRENCY} {current_savings:,.2f}")
+        if goal is None or goal <= 0:
+            st.error("Please enter a valid savings goal amount greater than 0.")
         else:
-            remaining = goal - current_savings
-            st.warning(f"Goal not reached. Remaining amount: {CURRENCY} {remaining:,.2f}")
+            if current_savings >= goal:
+                st.success(f"Goal reached. Current savings: {CURRENCY} {current_savings:,.2f}")
+            else:
+                remaining = goal - current_savings
+                st.warning(f"Goal not reached. Remaining amount: {CURRENCY} {remaining:,.2f}")
 
 # Step 10.18: Export Multi-Sheet Excel Financial Report Handler
 elif choice == "18. Export Financial Report":
@@ -411,28 +676,80 @@ elif choice == "18. Export Financial Report":
     expense_df = load_expenses()
     budget_df = load_budget()
 
+    # Clean Income & Expense DataFrames for export
+    clean_income = (
+        income_df[["date", "amount", "category", "source", "description"]]
+        if not income_df.empty and "source" in income_df.columns
+        else income_df
+    )
+    clean_expenses = (
+        expense_df[["date", "amount", "category", "payment", "description"]]
+        if not expense_df.empty and "payment" in expense_df.columns
+        else expense_df
+    )
+
+    # Combined Transaction History
+    all_transactions = []
+    if not income_df.empty:
+        for _, row in income_df.iterrows():
+            all_transactions.append({
+                "type": "Income",
+                "date": row.get("date", ""),
+                "amount": row.get("amount", 0.0),
+                "category": row.get("category", ""),
+                "detail": row.get("source", ""),
+                "description": row.get("description", ""),
+            })
+    if not expense_df.empty:
+        for _, row in expense_df.iterrows():
+            all_transactions.append({
+                "type": "Expense",
+                "date": row.get("date", ""),
+                "amount": row.get("amount", 0.0),
+                "category": row.get("category", ""),
+                "detail": row.get("payment", ""),
+                "description": row.get("description", ""),
+            })
+    history_df = pd.DataFrame(all_transactions)
+    if not history_df.empty:
+        history_df = history_df.sort_values(by="date", ascending=False)
+
+    # Category Wise Expense Breakdown
+    cat_summary = pd.DataFrame(columns=["category", "total_amount"])
+    if not expense_df.empty and "category" in expense_df.columns:
+        cat_grp = expense_df.groupby("category")["amount"].sum().reset_index()
+        cat_summary = cat_grp.rename(columns={"amount": "total_amount"}).sort_values(by="total_amount", ascending=False)
+
+    # Financial Summary Metrics
     summary = pd.DataFrame(
         {
-            "Metric": ["Total Income", "Total Expense", "Monthly Savings", "Budget"],
-            "Value": [total_income(), total_expense(), monthly_savings_value(), float(budget_df["budget"].sum()) if not budget_df.empty else 0.0],
+            "Metric": ["Total Income", "Total Expense", "Monthly Savings", "Current Budget"],
+            "Value": [
+                total_income(),
+                total_expense(),
+                monthly_savings_value(),
+                float(budget_df["budget"].sum()) if not budget_df.empty else 0.0,
+            ],
         }
     )
 
     try:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            income_df.to_excel(writer, sheet_name="Income", index=False)
-            expense_df.to_excel(writer, sheet_name="Expenses", index=False)
+            clean_income.to_excel(writer, sheet_name="Income", index=False)
+            clean_expenses.to_excel(writer, sheet_name="Expenses", index=False)
             budget_df.to_excel(writer, sheet_name="Budget", index=False)
+            history_df.to_excel(writer, sheet_name="Transactions", index=False)
+            cat_summary.to_excel(writer, sheet_name="Category Expenses", index=False)
             summary.to_excel(writer, sheet_name="Summary", index=False)
 
         # Also save local file on server as backup
         with open(REPORT_FILE.with_suffix(".xlsx"), "wb") as f:
             f.write(buffer.getvalue())
 
-        st.success("Report generated successfully!")
+        st.success("Complete Financial Report (.xlsx) generated successfully!")
         st.download_button(
-            label="📥 Click Here to Download Financial Report (.xlsx)",
+            label=" Click Here to Download Complete Financial Report (.xlsx)",
             data=buffer.getvalue(),
             file_name="financial_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

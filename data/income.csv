@@ -1,3 +1,4 @@
-date,amount,category,source,description
-2026-08-28,1500.0,job,salary,aug salary
-2026-08-30,3500.0,Job,Salary,aug
+date,timestamp,amount,category,source,description
+2026-08-28,2026-09-01 01:42:18,1500.0,job,salary,aug salary
+2026-08-30,2026-09-01 01:42:18,3500.0,Job,Salary,aug
+2026-09-03,2026-09-03 12:46:22,2000.0,Salary,Job,sep salary
