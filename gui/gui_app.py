@@ -20,12 +20,13 @@ class FinanceGUIApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Personal Finance Desktop Dashboard")
-        self.geometry("1100x700")
-        self.minsize(900, 600)
+        self.geometry("1150x720")
+        self.minsize(950, 620)
         self.configure(bg="#f4f7f6")
 
         self.auth_manager = UserManager()
         self.current_user = "default"
+        self.user_info = {"full_name": "Guest User", "email": "guest@local"}
         self.manager = FinanceManager(username=self.current_user)
 
         self.setup_styles()
@@ -39,7 +40,7 @@ class FinanceGUIApp(tk.Tk):
         # Color palette
         self.style.configure("Main.TFrame", background="#f4f7f6")
         self.style.configure("Header.TFrame", background="#2b5876")
-        self.style.configure("Header.TLabel", background="#2b5876", foreground="#ffffff", font=("Segoe UI", 16, "bold"))
+        self.style.configure("Header.TLabel", background="#2b5876", foreground="#ffffff", font=("Segoe UI", 15, "bold"))
         self.style.configure("SubHeader.TLabel", background="#2b5876", foreground="#dce4ec", font=("Segoe UI", 10))
 
         self.style.configure("Card.TFrame", background="#ffffff", relief="flat")
@@ -49,17 +50,29 @@ class FinanceGUIApp(tk.Tk):
         self.style.configure("Panel.TFrame", background="#ffffff", relief="flat")
         self.style.configure("PanelTitle.TLabel", background="#ffffff", foreground="#2b5876", font=("Segoe UI", 12, "bold"))
 
-        self.style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=6)
+        self.style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=5)
         self.style.configure("Accent.TButton", font=("Segoe UI", 9, "bold"), background="#2b5876", foreground="#ffffff", padding=6)
+        self.style.configure("Header.TButton", font=("Segoe UI", 9, "bold"), background="#4e73df", foreground="#ffffff", padding=4)
 
     def build_ui(self):
-        # Header banner
-        header = ttk.Frame(self, style="Header.TFrame", padding=15)
+        # Top Header Banner
+        header = ttk.Frame(self, style="Header.TFrame", padding=12)
         header.pack(fill="x")
 
-        ttk.Label(header, text="💼 Personal Finance Manager Dashboard", style="Header.TLabel").pack(side="left")
-        self.user_status_label = ttk.Label(header, text=f"User: {self.current_user}", style="SubHeader.TLabel")
-        self.user_status_label.pack(side="right", padx=10)
+        # Left Header Title
+        title_frame = ttk.Frame(header, style="Header.TFrame")
+        title_frame.pack(side="left")
+        ttk.Label(title_frame, text="💼 Personal Finance Manager", style="Header.TLabel").pack(anchor="w")
+
+        # Right Header Account Details
+        user_frame = ttk.Frame(header, style="Header.TFrame")
+        user_frame.pack(side="right")
+
+        self.user_status_label = ttk.Label(user_frame, text="", style="SubHeader.TLabel")
+        self.user_status_label.pack(side="left", padx=10)
+
+        switch_btn = ttk.Button(user_frame, text="👤 Switch / Log In Account", command=self.open_account_dialog)
+        switch_btn.pack(side="right", padx=5)
 
         # Main layout container
         main_container = ttk.Frame(self, style="Main.TFrame", padding=15)
@@ -161,6 +174,102 @@ class FinanceGUIApp(tk.Tk):
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
+    def open_account_dialog(self):
+        """Open a dialog window to log in, sign up, or switch accounts."""
+        dialog = tk.Toplevel(self)
+        dialog.title("Account Management")
+        dialog.geometry("450x420")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        notebook = ttk.Notebook(dialog)
+        notebook.pack(fill="both", expand=True, padding=10)
+
+        # Tab 1: Log In
+        login_tab = ttk.Frame(notebook, padding=15)
+        notebook.add(login_tab, text="🔑 Log In")
+
+        ttk.Label(login_tab, text="Username", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(5, 2))
+        login_user_var = tk.StringVar()
+        ttk.Entry(login_tab, textvariable=login_user_var).pack(fill="x", pady=(0, 8))
+
+        ttk.Label(login_tab, text="Password", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(5, 2))
+        login_pass_var = tk.StringVar()
+        ttk.Entry(login_tab, textvariable=login_pass_var, show="*").pack(fill="x", pady=(0, 15))
+
+        def handle_login():
+            user = login_user_var.get().strip()
+            pwd = login_pass_var.get().strip()
+            ok, msg, info = self.auth_manager.login(user, pwd)
+            if ok:
+                self.current_user = user
+                self.user_info = info
+                self.manager = FinanceManager(username=self.current_user)
+                self.refresh()
+                dialog.destroy()
+                messagebox.showinfo("Logged In", f"Welcome back, {info.get('full_name') or user}!")
+            else:
+                messagebox.showerror("Login Error", msg)
+
+        ttk.Button(login_tab, text="Log In", style="Accent.TButton", command=handle_login).pack(fill="x", pady=10)
+
+        # Quick Switch Option
+        existing_users = list(self.auth_manager.users.keys())
+        if existing_users:
+            ttk.Separator(login_tab, orient="horizontal").pack(fill="x", pady=10)
+            ttk.Label(login_tab, text="Quick Select Registered Account:").pack(anchor="w", pady=(0, 4))
+            selected_user_var = tk.StringVar(value=existing_users[0])
+            user_cb = ttk.Combobox(login_tab, textvariable=selected_user_var, values=existing_users, state="readonly")
+            user_cb.pack(fill="x", pady=(0, 8))
+
+            def handle_quick_switch():
+                user = selected_user_var.get()
+                info = self.auth_manager.users.get(user, {})
+                self.current_user = user
+                self.user_info = info
+                self.manager = FinanceManager(username=self.current_user)
+                self.refresh()
+                dialog.destroy()
+
+            ttk.Button(login_tab, text="Switch to Account", command=handle_quick_switch).pack(fill="x")
+
+        # Tab 2: Sign Up
+        signup_tab = ttk.Frame(notebook, padding=15)
+        notebook.add(signup_tab, text="📝 Sign Up")
+
+        ttk.Label(signup_tab, text="Username", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        su_user = tk.StringVar()
+        ttk.Entry(signup_tab, textvariable=su_user).pack(fill="x", pady=(0, 4))
+
+        ttk.Label(signup_tab, text="Full Name", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        su_name = tk.StringVar()
+        ttk.Entry(signup_tab, textvariable=su_name).pack(fill="x", pady=(0, 4))
+
+        ttk.Label(signup_tab, text="Email", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        su_email = tk.StringVar()
+        ttk.Entry(signup_tab, textvariable=su_email).pack(fill="x", pady=(0, 4))
+
+        ttk.Label(signup_tab, text="Password", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        su_pass = tk.StringVar()
+        ttk.Entry(signup_tab, textvariable=su_pass, show="*").pack(fill="x", pady=(0, 10))
+
+        def handle_signup():
+            u = su_user.get().strip()
+            n = su_name.get().strip()
+            e = su_email.get().strip()
+            p = su_pass.get().strip()
+
+            ok, msg = self.auth_manager.signup(u, p, n, e)
+            if ok:
+                messagebox.showinfo("Sign Up Success", msg)
+                login_user_var.set(u)
+                notebook.select(0)
+            else:
+                messagebox.showerror("Sign Up Error", msg)
+
+        ttk.Button(signup_tab, text="Create Account", style="Accent.TButton", command=handle_signup).pack(fill="x", pady=5)
+
     def add_transaction(self):
         try:
             val_str = self.amount_var.get().strip()
@@ -223,6 +332,11 @@ class FinanceGUIApp(tk.Tk):
         self.refresh()
 
     def refresh(self):
+        # Update User Header Info
+        display_name = self.user_info.get("full_name") or self.current_user
+        email = self.user_info.get("email") or "N/A"
+        self.user_status_label.configure(text=f"👤 {display_name} (@{self.current_user})  |  📧 {email}")
+
         inc_total = sum(i.amount for i in self.manager.income)
         exp_total = sum(e.amount for e in self.manager.expenses)
         savings = inc_total - exp_total
