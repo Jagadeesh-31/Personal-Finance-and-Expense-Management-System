@@ -35,10 +35,13 @@ def setup_logging(log_level=logging.INFO):
 
     # Step 2.5: Attach FileHandler if not already configured
     if not file_handler_exists:
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        try:
+            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except Exception:
+            pass
 
     # Step 2.6: Check if console StreamHandler already attached
     console_handler_exists = any(
