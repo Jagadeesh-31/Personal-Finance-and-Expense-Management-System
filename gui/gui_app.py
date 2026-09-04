@@ -79,7 +79,7 @@ class FinanceGUIApp(tk.Tk):
 
         for idx, (key, title, color) in enumerate(metrics):
             card = ttk.Frame(cards_frame, style="Card.TFrame", padding=15)
-            card.grid(row=0, column=idx, weight=1, padx=6, sticky="ew")
+            card.grid(row=0, column=idx, padx=6, sticky="ew")
             cards_frame.columnconfigure(idx, weight=1)
 
             ttk.Label(card, text=title, style="CardTitle.TLabel").pack(anchor="w")
