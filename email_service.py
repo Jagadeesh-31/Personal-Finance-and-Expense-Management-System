@@ -46,6 +46,8 @@ def _get_smtp_config() -> tuple[str, int, str, str, str]:
     return server, port, username, password, from_email
 
 
+from email.utils import formatdate, make_msgid
+
 # Step 3: Define core email dispatch function via SMTP with offline fallback logging.
 def send_email(to_email: str, subject: str, body_text: str, body_html: str = None) -> tuple[bool, str]:
     """
@@ -66,22 +68,27 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         return True, "Email logged (offline mode - Set SMTP_USERNAME & SMTP_PASSWORD in .env or Streamlit Secrets)."
 
     try:
-        # Step 3.4: Construct MIME Multipart Email Container
+        # Step 3.4: Construct MIME Multipart Email Container with SPF/DKIM aligned headers
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"Personal Finance Application <{smtp_from}>"
+        sender_email = smtp_username if smtp_username else smtp_from
+        msg["From"] = f"Personal Finance App <{sender_email}>"
         msg["To"] = to_email
+        msg["Reply-To"] = sender_email
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="gmail.com")
+        msg["X-Mailer"] = "Python-PersonalFinanceApp/2.0"
 
         # Step 3.5: Attach plain text and optional HTML body parts
-        msg.attach(MIMEText(body_text, "plain"))
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
         if body_html:
-            msg.attach(MIMEText(body_html, "html"))
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         # Step 3.6: Establish TLS encrypted SMTP connection and send email
         with smtplib.SMTP(smtp_server, smtp_port, timeout=12) as server:
             server.starttls()
             server.login(smtp_username, smtp_password)
-            server.sendmail(smtp_from, [to_email], msg.as_string())
+            server.sendmail(sender_email, [to_email], msg.as_string())
 
         logger.info(f"Email successfully sent to '{to_email}' with subject '{subject}'.")
         return True, "Email sent successfully to inbox!"
