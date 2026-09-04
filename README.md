@@ -53,6 +53,14 @@ streamlit run streamlit_app.py
 
 Open the URL shown in the terminal. The Streamlit application provides the complete visual dashboard and report features.
 
+## Run the Desktop GUI Application
+
+```bash
+python gui/gui_app.py
+```
+
+The desktop GUI provides an offline dashboard for tracking transactions and summary cards.
+
 ## Data Storage
 
 Application data is stored in the `data` folder:
@@ -80,7 +88,7 @@ Remaining Budget = Monthly Budget - Monthly Expenses
 - `report.py`: Console financial report generation.
 - `main.py`: Console menu and application entry point.
 - `streamlit_app.py`: Streamlit dashboard.
-- `gui.py`: Tkinter transaction dashboard.
+- `gui/gui_app.py`: Tkinter desktop transaction dashboard.
 - `requirements.txt`: Python dependencies.
 
 ## Troubleshooting
