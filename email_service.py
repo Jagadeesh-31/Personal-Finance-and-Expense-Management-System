@@ -4,40 +4,46 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from logger_config import get_logger
 
+# Step 1: Initialize namespaced logger for email dispatch tracking
 logger = get_logger("email_service")
 
-# SMTP Configuration defaults (can be overridden via environment variables)
+# Step 2: Read SMTP Configuration defaults (can be overridden via environment variables)
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "jagatic3384@gmail.com")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "vtwngrathxatgokz").replace(" ", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USERNAME)
 
 
+# Step 3: Define core email dispatch function via SMTP with offline fallback logging.
 def send_email(to_email: str, subject: str, body_text: str, body_html: str = None) -> tuple[bool, str]:
     """
     Send an email via SMTP. Falls back to logging if SMTP settings are invalid or connection fails.
     """
+    # Step 3.1: Clean recipient email address
     to_email = to_email.strip()
     if not to_email:
         logger.warning("No recipient email provided. Skipping email dispatch.")
         return False, "Recipient email is empty."
 
-    # If credentials are not set, fallback gracefully to log mode
+    # Step 3.2: Fallback to log mode if SMTP credentials are missing
     if not SMTP_USERNAME or not SMTP_PASSWORD:
         logger.info(f"[DEV / OFFLINE EMAIL MODE] To: {to_email} | Subject: {subject}\n{body_text}")
         return True, "Email logged (offline mode)."
 
     try:
+        # Step 3.3: Construct MIME Multipart Email Container
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = f"Personal Finance Application <{SMTP_FROM}>"
         msg["To"] = to_email
 
+        # Step 3.4: Attach plain text and optional HTML body parts
         msg.attach(MIMEText(body_text, "plain"))
         if body_html:
             msg.attach(MIMEText(body_html, "html"))
 
+        # Step 3.5: Establish TLS encrypted SMTP connection and send email
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
@@ -47,16 +53,19 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         return True, "Email sent successfully."
 
     except Exception as err:
+        # Step 3.6: Handle connection errors gracefully and output body content to log
         logger.error(f"Failed to send email to '{to_email}': {err}", exc_info=True)
-        # Also log content so developer/user can see OTP or message in app.log
         logger.info(f"[LOGGED DUE TO SMTP ERROR] To: {to_email} | Subject: {subject}\n{body_text}")
         return False, f"Email delivery failed: {err}"
 
 
+# Step 4: Dispatch Welcome Registration Email upon account creation.
 def send_registration_email(to_email: str, username: str) -> tuple[bool, str]:
     """Send welcome email upon new user account creation."""
+    # Step 4.1: Construct registration subject line
     subject = "Welcome to Personal Finance Management System!"
 
+    # Step 4.2: Construct plain text welcome body
     body_text = (
         f"Hello {username},\n\n"
         f"Thank you for registering with Personal Finance Management System!\n"
@@ -65,6 +74,7 @@ def send_registration_email(to_email: str, username: str) -> tuple[bool, str]:
         f"Best regards,\nPersonal Finance Team"
     )
 
+    # Step 4.3: Construct HTML template welcome body
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -84,13 +94,17 @@ def send_registration_email(to_email: str, username: str) -> tuple[bool, str]:
     </html>
     """
 
+    # Step 4.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)
 
 
+# Step 5: Dispatch 6-digit OTP email for password reset verification.
 def send_otp_email(to_email: str, username: str, otp: str) -> tuple[bool, str]:
     """Send password reset 6-digit OTP email."""
+    # Step 5.1: Construct OTP subject line
     subject = f"Your Password Reset OTP: {otp}"
 
+    # Step 5.2: Construct plain text OTP body
     body_text = (
         f"Hello {username},\n\n"
         f"We received a request to reset the password for your account '{username}'.\n\n"
@@ -99,6 +113,7 @@ def send_otp_email(to_email: str, username: str, otp: str) -> tuple[bool, str]:
         f"Best regards,\nPersonal Finance Team"
     )
 
+    # Step 5.3: Construct HTML template OTP body
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -117,13 +132,17 @@ def send_otp_email(to_email: str, username: str, otp: str) -> tuple[bool, str]:
     </html>
     """
 
+    # Step 5.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)
 
 
+# Step 6: Dispatch Security Alert Email upon password update.
 def send_password_changed_email(to_email: str, username: str) -> tuple[bool, str]:
     """Send password changed security alert email."""
+    # Step 6.1: Construct security alert subject line
     subject = "Security Alert: Your Password Has Been Changed"
 
+    # Step 6.2: Construct plain text alert body
     body_text = (
         f"Hello {username},\n\n"
         f"This is to confirm that the password for your account '{username}' has been successfully changed.\n\n"
@@ -132,6 +151,7 @@ def send_password_changed_email(to_email: str, username: str) -> tuple[bool, str
         f"Best regards,\nPersonal Finance Security Team"
     )
 
+    # Step 6.3: Construct HTML template alert body
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -150,4 +170,5 @@ def send_password_changed_email(to_email: str, username: str) -> tuple[bool, str
     </html>
     """
 
+    # Step 6.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)

@@ -3,68 +3,80 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Ensure root project directory is in python module search path
+# Step 1: Ensure root project directory is in Python module search path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Step 2: Import backend data managers and transaction models
 from finance import FinanceManager, Income, Expense
 from auth import UserManager
 
+# Step 3: Define currency symbol constant
 RUPEE = "Rs."
 
 
+# Step 4: Define main Desktop GUI Application class inheriting from tk.Tk
 class FinanceGUIApp(tk.Tk):
     """Tkinter Desktop Dashboard GUI for Personal Finance Management System."""
 
+    # Step 4.1: Initialize window dimensions, backend managers, and state variables
     def __init__(self):
         super().__init__()
+        # Step 4.1a: Set window title and dimensions
         self.title("Personal Finance Desktop Dashboard")
         self.geometry("1150x720")
         self.minsize(950, 620)
         self.configure(bg="#f4f7f6")
 
+        # Step 4.1b: Initialize authentication manager and default guest user profile
         self.auth_manager = UserManager()
         self.current_user = "default"
         self.user_info = {"full_name": "Guest User", "email": "guest@local"}
         self.manager = FinanceManager(username=self.current_user)
 
+        # Step 4.1c: Setup visual styles, build UI layout, and load initial data
         self.setup_styles()
         self.build_ui()
         self.refresh()
 
+    # Step 4.2: Configure custom TTK styling theme and color tokens
     def setup_styles(self):
         self.style = ttk.Style()
         self.style.theme_use("clam")
 
-        # Color palette
+        # Step 4.2a: Configure background colors and header text styles
         self.style.configure("Main.TFrame", background="#f4f7f6")
         self.style.configure("Header.TFrame", background="#2b5876")
         self.style.configure("Header.TLabel", background="#2b5876", foreground="#ffffff", font=("Segoe UI", 15, "bold"))
         self.style.configure("SubHeader.TLabel", background="#2b5876", foreground="#dce4ec", font=("Segoe UI", 10))
 
+        # Step 4.2b: Configure summary card container styles
         self.style.configure("Card.TFrame", background="#ffffff", relief="flat")
         self.style.configure("CardTitle.TLabel", background="#ffffff", foreground="#657089", font=("Segoe UI", 10, "bold"))
         self.style.configure("CardValue.TLabel", background="#ffffff", foreground="#2b5876", font=("Segoe UI", 16, "bold"))
 
+        # Step 4.2c: Configure side panel styles
         self.style.configure("Panel.TFrame", background="#ffffff", relief="flat")
         self.style.configure("PanelTitle.TLabel", background="#ffffff", foreground="#2b5876", font=("Segoe UI", 12, "bold"))
 
+        # Step 4.2d: Configure button theme styles
         self.style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=5)
         self.style.configure("Accent.TButton", font=("Segoe UI", 9, "bold"), background="#2b5876", foreground="#ffffff", padding=6)
         self.style.configure("Header.TButton", font=("Segoe UI", 9, "bold"), background="#4e73df", foreground="#ffffff", padding=4)
 
+    # Step 4.3: Build complete user interface structure (Header, Metric Cards, Form & Table)
     def build_ui(self):
-        # Top Header Banner
+        # Step 4.3a: Top Header Banner
         header = ttk.Frame(self, style="Header.TFrame", padding=12)
         header.pack(fill="x")
 
-        # Left Header Title
+        # Step 4.3b: Header Title Label
         title_frame = ttk.Frame(header, style="Header.TFrame")
         title_frame.pack(side="left")
         ttk.Label(title_frame, text="💼 Personal Finance Manager", style="Header.TLabel").pack(anchor="w")
 
-        # Right Header Account Details
+        # Step 4.3c: Right Header User Account Info & Action Buttons
         user_frame = ttk.Frame(header, style="Header.TFrame")
         user_frame.pack(side="right")
 
@@ -72,16 +84,19 @@ class FinanceGUIApp(tk.Tk):
         self.user_status_label.pack(side="left", padx=10)
 
         login_btn = ttk.Button(user_frame, text="🔑 Log In", command=self.open_account_dialog)
-        login_btn.pack(side="left", padx=4)
+        login_btn.pack(side="left", padx=3)
+
+        switch_btn = ttk.Button(user_frame, text="🔄 Switch Account", command=self.open_switch_account_dialog)
+        switch_btn.pack(side="left", padx=3)
 
         logout_btn = ttk.Button(user_frame, text="🚪 Log Out", command=self.handle_logout)
-        logout_btn.pack(side="left", padx=4)
+        logout_btn.pack(side="left", padx=3)
 
-        # Main layout container
+        # Step 4.3d: Main Layout Container Frame
         main_container = ttk.Frame(self, style="Main.TFrame", padding=15)
         main_container.pack(fill="both", expand=True)
 
-        # Summary Metrics Row
+        # Step 4.3e: Summary Metric Cards Row
         cards_frame = ttk.Frame(main_container, style="Main.TFrame")
         cards_frame.pack(fill="x", pady=(0, 15))
 
@@ -93,6 +108,7 @@ class FinanceGUIApp(tk.Tk):
             ("budget", "Monthly Budget", "#4f7d5b"),
         ]
 
+        # Step 4.3f: Construct individual summary cards
         for idx, (key, title, color) in enumerate(metrics):
             card = ttk.Frame(cards_frame, style="Card.TFrame", padding=15)
             card.grid(row=0, column=idx, padx=6, sticky="ew")
@@ -103,42 +119,48 @@ class FinanceGUIApp(tk.Tk):
             lbl.pack(anchor="w", pady=(5, 0))
             self.card_values[key] = lbl
 
-        # Content Split Layout (Left: Input Form, Right: Data Table)
+        # Step 4.3g: Content Split Layout (Left: Form, Right: Treeview Table)
         body = ttk.Frame(main_container, style="Main.TFrame")
         body.pack(fill="both", expand=True)
 
-        # Left Panel - Form
+        # Step 4.3h: Left Side Panel - Input Form
         form_panel = ttk.Frame(body, style="Panel.TFrame", padding=15, width=320)
         form_panel.pack(side="left", fill="y", padx=(0, 10))
         form_panel.pack_propagate(False)
 
         ttk.Label(form_panel, text="Add Transaction", style="PanelTitle.TLabel").pack(anchor="w", pady=(0, 10))
 
+        # Step 4.3i: Transaction Type Combobox
         ttk.Label(form_panel, text="Transaction Type", background="#ffffff").pack(anchor="w", pady=(5, 2))
         self.kind_var = tk.StringVar(value="Income")
         type_cb = ttk.Combobox(form_panel, textvariable=self.kind_var, values=["Income", "Expense"], state="readonly")
         type_cb.pack(fill="x", pady=(0, 8))
 
+        # Step 4.3j: Amount Input Entry
         ttk.Label(form_panel, text="Amount (Rs.)", background="#ffffff").pack(anchor="w", pady=(5, 2))
         self.amount_var = tk.StringVar()
         ttk.Entry(form_panel, textvariable=self.amount_var).pack(fill="x", pady=(0, 8))
 
+        # Step 4.3k: Category Input Entry
         ttk.Label(form_panel, text="Category", background="#ffffff").pack(anchor="w", pady=(5, 2))
         self.category_var = tk.StringVar()
         ttk.Entry(form_panel, textvariable=self.category_var).pack(fill="x", pady=(0, 8))
 
+        # Step 4.3l: Source / Payment Input Entry
         ttk.Label(form_panel, text="Source / Payment Method", background="#ffffff").pack(anchor="w", pady=(5, 2))
         self.detail_var = tk.StringVar()
         ttk.Entry(form_panel, textvariable=self.detail_var).pack(fill="x", pady=(0, 8))
 
+        # Step 4.3m: Description Input Entry
         ttk.Label(form_panel, text="Description", background="#ffffff").pack(anchor="w", pady=(5, 2))
         self.desc_var = tk.StringVar()
         ttk.Entry(form_panel, textvariable=self.desc_var).pack(fill="x", pady=(0, 15))
 
+        # Step 4.3n: Add Entry and Refresh Buttons
         ttk.Button(form_panel, text="➕ Add Entry", style="Accent.TButton", command=self.add_transaction).pack(fill="x", pady=4)
         ttk.Button(form_panel, text="🔄 Refresh Table", command=self.refresh).pack(fill="x", pady=4)
 
-        # Right Panel - Table
+        # Step 4.3o: Right Side Panel - Transaction Records Table
         table_panel = ttk.Frame(body, style="Panel.TFrame", padding=15)
         table_panel.pack(side="right", fill="both", expand=True)
 
@@ -151,7 +173,7 @@ class FinanceGUIApp(tk.Tk):
         self.table_status = ttk.Label(toolbar, text="", background="#ffffff", foreground="#657089")
         self.table_status.pack(side="right", padx=10)
 
-        # Treeview Table
+        # Step 4.3p: Construct Treeview Grid Table with columns
         cols = ("type", "amount", "category", "detail", "description", "date")
         self.tree = ttk.Treeview(table_panel, columns=cols, show="headings", selectmode="extended")
 
@@ -168,15 +190,18 @@ class FinanceGUIApp(tk.Tk):
             self.tree.heading(cid, text=title)
             self.tree.column(cid, width=width, anchor="w")
 
+        # Step 4.3q: Define color tags for income and expense rows
         self.tree.tag_configure("income", foreground="#18805f")
         self.tree.tag_configure("expense", foreground="#c04c4c")
 
+        # Step 4.3r: Attach Scrollbar
         scroll = ttk.Scrollbar(table_panel, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
 
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
+    # Step 4.4: Handler to logout current active user session
     def handle_logout(self):
         """Log out current user and return to Guest mode."""
         if self.current_user == "default":
@@ -190,6 +215,43 @@ class FinanceGUIApp(tk.Tk):
             self.refresh()
             messagebox.showinfo("Logged Out", "You have been logged out successfully.")
 
+    # Step 4.5: Handler to open quick account switching dialog modal
+    def open_switch_account_dialog(self):
+        """Open a dedicated quick account switching dialog."""
+        existing_users = list(self.auth_manager.users.keys())
+        if not existing_users:
+            messagebox.showinfo("Notice", "No registered accounts found. Please sign up or log in first.")
+            return
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Switch Account")
+        dialog.geometry("380x200")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#ffffff")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog, style="Dialog.TFrame", padding=20)
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(container, text="Select Account to Switch To:", font=("Segoe UI", 10, "bold"), background="#ffffff").pack(anchor="w", pady=(0, 8))
+        selected_user_var = tk.StringVar(value=self.current_user if self.current_user in existing_users else existing_users[0])
+        user_cb = ttk.Combobox(container, textvariable=selected_user_var, values=existing_users, state="readonly", font=("Segoe UI", 10))
+        user_cb.pack(fill="x", pady=(0, 15))
+
+        def do_switch():
+            user = selected_user_var.get()
+            info = self.auth_manager.users.get(user, {})
+            self.current_user = user
+            self.user_info = info
+            self.manager = FinanceManager(username=self.current_user)
+            self.refresh()
+            dialog.destroy()
+            messagebox.showinfo("Account Switched", f"Switched to account '@{user}'.")
+
+        ttk.Button(container, text="🔄 Switch Account Now", style="Accent.TButton", command=do_switch).pack(fill="x")
+
+    # Step 4.6: Handler to open full Account Management modal (Log In & Sign Up tabs)
     def open_account_dialog(self):
         """Open a dialog window to log in, sign up, or switch accounts."""
         dialog = tk.Toplevel(self)
@@ -200,7 +262,7 @@ class FinanceGUIApp(tk.Tk):
         dialog.transient(self)
         dialog.grab_set()
 
-        # Configure dialog background style
+        # Step 4.6a: Configure dialog background style
         self.style.configure("Dialog.TFrame", background="#ffffff")
         self.style.configure("Dialog.TNotebook", background="#ffffff")
 
@@ -210,7 +272,7 @@ class FinanceGUIApp(tk.Tk):
         notebook = ttk.Notebook(container, style="Dialog.TNotebook")
         notebook.pack(fill="both", expand=True)
 
-        # Tab 1: Log In
+        # Step 4.6b: Tab 1 - Log In Form
         login_tab = ttk.Frame(notebook, style="Dialog.TFrame", padding=15)
         notebook.add(login_tab, text="🔑 Log In")
 
@@ -238,7 +300,7 @@ class FinanceGUIApp(tk.Tk):
 
         ttk.Button(login_tab, text="Log In", style="Accent.TButton", command=handle_login).pack(fill="x", pady=5)
 
-        # Quick Switch Option
+        # Step 4.6c: Quick Select Registered Account Dropdown
         existing_users = list(self.auth_manager.users.keys())
         if existing_users:
             ttk.Separator(login_tab, orient="horizontal").pack(fill="x", pady=10)
@@ -258,7 +320,7 @@ class FinanceGUIApp(tk.Tk):
 
             ttk.Button(login_tab, text="Switch to Account", command=handle_quick_switch).pack(fill="x")
 
-        # Tab 2: Sign Up
+        # Step 4.6d: Tab 2 - Sign Up Form
         signup_tab = ttk.Frame(notebook, style="Dialog.TFrame", padding=15)
         notebook.add(signup_tab, text="📝 Sign Up")
 
@@ -294,6 +356,7 @@ class FinanceGUIApp(tk.Tk):
 
         ttk.Button(signup_tab, text="Create Account", style="Accent.TButton", command=handle_signup).pack(fill="x", pady=5)
 
+    # Step 4.7: Form submit handler to validate and append a new Income/Expense transaction
     def add_transaction(self):
         try:
             val_str = self.amount_var.get().strip()
@@ -318,7 +381,7 @@ class FinanceGUIApp(tk.Tk):
         else:
             self.manager.expenses.append(Expense(amount, category, desc, detail))
 
-        # Clear form fields
+        # Step 4.7a: Reset form input fields after successful addition
         self.amount_var.set("")
         self.category_var.set("")
         self.detail_var.set("")
@@ -327,6 +390,7 @@ class FinanceGUIApp(tk.Tk):
         self.refresh()
         messagebox.showinfo("Success", f"{kind} transaction added successfully.")
 
+    # Step 4.8: Table action handler to delete selected records
     def delete_selected(self):
         selected_items = self.tree.selection()
         if not selected_items:
@@ -355,38 +419,45 @@ class FinanceGUIApp(tk.Tk):
 
         self.refresh()
 
+    # Step 4.9: UI refresh handler updating user header, summary metrics, and treeview rows
     def refresh(self):
-        # Update User Header Info
+        # Step 4.9a: Update User Header Info text
         display_name = self.user_info.get("full_name") or self.current_user
         email = self.user_info.get("email") or "N/A"
         self.user_status_label.configure(text=f"👤 {display_name} (@{self.current_user})  |  📧 {email}")
 
+        # Step 4.9b: Calculate summary metric values
         inc_total = sum(i.amount for i in self.manager.income)
         exp_total = sum(e.amount for e in self.manager.expenses)
         savings = inc_total - exp_total
         budget = self.manager.budget or 0
 
+        # Step 4.9c: Update metric card label text values
         self.card_values["income"].configure(text=f"{RUPEE}{inc_total:,.2f}")
         self.card_values["expense"].configure(text=f"{RUPEE}{exp_total:,.2f}")
         self.card_values["savings"].configure(text=f"{RUPEE}{savings:,.2f}")
         self.card_values["budget"].configure(text=f"{RUPEE}{budget:,.2f}")
 
-        # Clear treeview items
+        # Step 4.9d: Clear old treeview table rows
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        # Step 4.9e: Populate income records into treeview table
         count = 0
         for item in self.manager.income:
             self.tree.insert("", "end", values=("Income", f"{RUPEE}{item.amount:,.2f}", item.category, item.source, item.description, getattr(item, "date", "-")), tags=("income",))
             count += 1
 
+        # Step 4.9f: Populate expense records into treeview table
         for item in self.manager.expenses:
             self.tree.insert("", "end", values=("Expense", f"{RUPEE}{item.amount:,.2f}", item.category, item.payment, item.description, getattr(item, "date", "-")), tags=("expense",))
             count += 1
 
+        # Step 4.9g: Update total table record counter label
         self.table_status.configure(text=f"Total Records: {count}")
 
 
+# Step 5: Application entry point for Desktop GUI
 if __name__ == "__main__":
     app = FinanceGUIApp()
     app.mainloop()
