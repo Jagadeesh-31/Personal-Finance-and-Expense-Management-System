@@ -178,23 +178,31 @@ class FinanceGUIApp(tk.Tk):
         """Open a dialog window to log in, sign up, or switch accounts."""
         dialog = tk.Toplevel(self)
         dialog.title("Account Management")
-        dialog.geometry("450x420")
+        dialog.geometry("450x450")
         dialog.resizable(False, False)
+        dialog.configure(bg="#ffffff")
         dialog.transient(self)
         dialog.grab_set()
 
-        notebook = ttk.Notebook(dialog)
-        notebook.pack(fill="both", expand=True, padding=10)
+        # Configure dialog background style
+        self.style.configure("Dialog.TFrame", background="#ffffff")
+        self.style.configure("Dialog.TNotebook", background="#ffffff")
+
+        container = ttk.Frame(dialog, style="Dialog.TFrame", padding=15)
+        container.pack(fill="both", expand=True)
+
+        notebook = ttk.Notebook(container, style="Dialog.TNotebook")
+        notebook.pack(fill="both", expand=True)
 
         # Tab 1: Log In
-        login_tab = ttk.Frame(notebook, padding=15)
+        login_tab = ttk.Frame(notebook, style="Dialog.TFrame", padding=15)
         notebook.add(login_tab, text="🔑 Log In")
 
-        ttk.Label(login_tab, text="Username", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(5, 2))
+        ttk.Label(login_tab, text="Username", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(5, 2))
         login_user_var = tk.StringVar()
         ttk.Entry(login_tab, textvariable=login_user_var).pack(fill="x", pady=(0, 8))
 
-        ttk.Label(login_tab, text="Password", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(5, 2))
+        ttk.Label(login_tab, text="Password", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(5, 2))
         login_pass_var = tk.StringVar()
         ttk.Entry(login_tab, textvariable=login_pass_var, show="*").pack(fill="x", pady=(0, 15))
 
@@ -212,13 +220,13 @@ class FinanceGUIApp(tk.Tk):
             else:
                 messagebox.showerror("Login Error", msg)
 
-        ttk.Button(login_tab, text="Log In", style="Accent.TButton", command=handle_login).pack(fill="x", pady=10)
+        ttk.Button(login_tab, text="Log In", style="Accent.TButton", command=handle_login).pack(fill="x", pady=5)
 
         # Quick Switch Option
         existing_users = list(self.auth_manager.users.keys())
         if existing_users:
             ttk.Separator(login_tab, orient="horizontal").pack(fill="x", pady=10)
-            ttk.Label(login_tab, text="Quick Select Registered Account:").pack(anchor="w", pady=(0, 4))
+            ttk.Label(login_tab, text="Quick Select Registered Account:", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(0, 4))
             selected_user_var = tk.StringVar(value=existing_users[0])
             user_cb = ttk.Combobox(login_tab, textvariable=selected_user_var, values=existing_users, state="readonly")
             user_cb.pack(fill="x", pady=(0, 8))
@@ -235,22 +243,22 @@ class FinanceGUIApp(tk.Tk):
             ttk.Button(login_tab, text="Switch to Account", command=handle_quick_switch).pack(fill="x")
 
         # Tab 2: Sign Up
-        signup_tab = ttk.Frame(notebook, padding=15)
+        signup_tab = ttk.Frame(notebook, style="Dialog.TFrame", padding=15)
         notebook.add(signup_tab, text="📝 Sign Up")
 
-        ttk.Label(signup_tab, text="Username", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        ttk.Label(signup_tab, text="Username", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(2, 1))
         su_user = tk.StringVar()
         ttk.Entry(signup_tab, textvariable=su_user).pack(fill="x", pady=(0, 4))
 
-        ttk.Label(signup_tab, text="Full Name", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        ttk.Label(signup_tab, text="Full Name", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(2, 1))
         su_name = tk.StringVar()
         ttk.Entry(signup_tab, textvariable=su_name).pack(fill="x", pady=(0, 4))
 
-        ttk.Label(signup_tab, text="Email", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        ttk.Label(signup_tab, text="Email", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(2, 1))
         su_email = tk.StringVar()
         ttk.Entry(signup_tab, textvariable=su_email).pack(fill="x", pady=(0, 4))
 
-        ttk.Label(signup_tab, text="Password", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(2, 1))
+        ttk.Label(signup_tab, text="Password", font=("Segoe UI", 9, "bold"), background="#ffffff").pack(anchor="w", pady=(2, 1))
         su_pass = tk.StringVar()
         ttk.Entry(signup_tab, textvariable=su_pass, show="*").pack(fill="x", pady=(0, 10))
 
