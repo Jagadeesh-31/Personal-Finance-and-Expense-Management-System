@@ -7,12 +7,43 @@ from logger_config import get_logger
 # Step 1: Initialize namespaced logger for email dispatch tracking
 logger = get_logger("email_service")
 
-# Step 2: Read SMTP Configuration defaults from environment variables
-SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USERNAME)
+from pathlib import Path
+
+# Step 2: Helper function to dynamically retrieve SMTP credentials from env or Streamlit Secrets
+def _get_smtp_config() -> tuple[str, int, str, str, str]:
+    """Dynamically resolve SMTP credentials from .env file, os.environ, or Streamlit Secrets."""
+    # Step 2.1: Load local .env file if present
+    env_file = Path.cwd() / ".env"
+    if env_file.exists():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip() not in os.environ:
+                            os.environ[k.strip()] = v.strip()
+        except Exception:
+            pass
+
+    server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", 587))
+    username = os.environ.get("SMTP_USERNAME", "")
+    password = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
+
+    # Step 2.2: Check Streamlit Secrets if running on Streamlit Cloud
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets"):
+            server = st.secrets.get("SMTP_SERVER", server)
+            port = int(st.secrets.get("SMTP_PORT", port))
+            username = st.secrets.get("SMTP_USERNAME", username)
+            password = str(st.secrets.get("SMTP_PASSWORD", password)).replace(" ", "")
+    except Exception:
+        pass
+
+    from_email = os.environ.get("SMTP_FROM", username)
+    return server, port, username, password, from_email
 
 
 # Step 3: Define core email dispatch function via SMTP with offline fallback logging.
@@ -26,34 +57,37 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         logger.warning("No recipient email provided. Skipping email dispatch.")
         return False, "Recipient email is empty."
 
-    # Step 3.2: Fallback to log mode if SMTP credentials are missing
-    if not SMTP_USERNAME or not SMTP_PASSWORD:
+    # Step 3.2: Dynamically resolve SMTP configuration
+    smtp_server, smtp_port, smtp_username, smtp_password, smtp_from = _get_smtp_config()
+
+    # Step 3.3: Fallback to log mode if SMTP credentials are missing
+    if not smtp_username or not smtp_password:
         logger.info(f"[DEV / OFFLINE EMAIL MODE] To: {to_email} | Subject: {subject}\n{body_text}")
-        return True, "Email logged (offline mode)."
+        return True, "Email logged (offline mode - Set SMTP_USERNAME & SMTP_PASSWORD in .env or Streamlit Secrets)."
 
     try:
-        # Step 3.3: Construct MIME Multipart Email Container
+        # Step 3.4: Construct MIME Multipart Email Container
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"Personal Finance Application <{SMTP_FROM}>"
+        msg["From"] = f"Personal Finance Application <{smtp_from}>"
         msg["To"] = to_email
 
-        # Step 3.4: Attach plain text and optional HTML body parts
+        # Step 3.5: Attach plain text and optional HTML body parts
         msg.attach(MIMEText(body_text, "plain"))
         if body_html:
             msg.attach(MIMEText(body_html, "html"))
 
-        # Step 3.5: Establish TLS encrypted SMTP connection and send email
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
+        # Step 3.6: Establish TLS encrypted SMTP connection and send email
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=12) as server:
             server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            server.login(smtp_username, smtp_password)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
 
         logger.info(f"Email successfully sent to '{to_email}' with subject '{subject}'.")
-        return True, "Email sent successfully."
+        return True, "Email sent successfully to inbox!"
 
     except Exception as err:
-        # Step 3.6: Handle connection errors gracefully and output body content to log
+        # Step 3.7: Handle connection errors gracefully and output body content to log
         logger.error(f"Failed to send email to '{to_email}': {err}", exc_info=True)
         logger.info(f"[LOGGED DUE TO SMTP ERROR] To: {to_email} | Subject: {subject}\n{body_text}")
         return False, f"Email delivery failed: {err}"
