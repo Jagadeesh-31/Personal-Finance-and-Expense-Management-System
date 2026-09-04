@@ -273,6 +273,7 @@ if not st.session_state.authenticated:
 
     with tab_login:
         st.subheader("Account Login")
+        st.caption("💡 **First time on this deployment?** Click the **`📝 Sign Up`** tab above to register your account.")
         with st.form("login_form"):
             login_user = st.text_input("Username")
             login_pass = st.text_input("Password", type="password")
@@ -287,7 +288,7 @@ if not st.session_state.authenticated:
                     st.success(msg)
                     st.rerun()
                 else:
-                    st.error(msg)
+                    st.error(msg + " (If you haven't registered on this cloud deployment yet, please click the '📝 Sign Up' tab above to create your account).")
 
     with tab_signup:
         st.subheader("Create New User Account")
