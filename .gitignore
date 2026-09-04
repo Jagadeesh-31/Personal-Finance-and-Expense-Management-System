@@ -1,4 +1,19 @@
-# Python bytecode & cache
+# User Data, Database JSONs & CSV Logs
+data/*.log
+data/*.json
+data/*.csv
+data/users/
+
+# Environment & IDE Credentials
+.env
+.env.local
+.venv/
+env/
+venv/
+.vscode/
+.idea/
+
+# Python Bytecode & Cache
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,17 +23,5 @@ __pycache__/
 .coverage
 htmlcov/
 
-# User Data & Logs
-data/app.log
-data/users/
-
 # Excel Reports
 *.xlsx
-
-# Environment & IDE
-.env
-.venv/
-env/
-venv/
-.vscode/
-.idea/

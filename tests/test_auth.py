@@ -125,3 +125,21 @@ def test_otp_expiration(temp_data_dir):
     exp_ok, exp_msg = auth.verify_otp_and_reset_password("expuser", otp, "brandnewpass")
     assert exp_ok is False
     assert "expired" in exp_msg.lower()
+
+
+def test_profile_picture_upload(temp_data_dir):
+    auth = UserManager()
+    auth.signup("picuser", "pass1234", "Pic User", "pic@example.com")
+
+    # Mock image bytes (1x1 fake PNG byte sequence)
+    fake_png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    ok, msg, rel_path = auth.save_profile_picture("picuser", fake_png_bytes, file_extension=".png")
+
+    assert ok is True
+    assert "updated successfully" in msg.lower()
+    assert "profile_pic.png" in rel_path
+
+    # Verify user record updated with profile_pic path
+    user_info = auth.users.get("picuser")
+    assert user_info["profile_pic"] == rel_path
+

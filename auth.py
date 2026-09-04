@@ -10,6 +10,11 @@ from email_service import (
     send_registration_email,
     send_otp_email,
     send_password_changed_email,
+    send_email_update_otp,
+)
+from whatsapp_service import (
+    send_phone_update_otp,
+    generate_phone_update_otp_link,
 )
 
 # Step 1: Initialize logger for authentication operations
@@ -47,8 +52,10 @@ class UserManager:
         self.data_dir = _get_data_dir()
         self.data_dir.mkdir(exist_ok=True)
         self.users_file = self.data_dir / "users.json"
+        self.profile_otps_file = self.data_dir / "profile_otps.json"
         self.users = self._load_users()
-        self.otps = {}  # In-memory OTP storage: {username: {"otp": str, "expires_at": float}}
+        self.otps = {}  # In-memory OTP storage for password reset: {username: {"otp": str, "expires_at": float}}
+        self.profile_otps = self._load_profile_otps()
 
     # Step 5.2: Load user accounts dictionary from users.json file
     def _load_users(self) -> dict:
@@ -61,6 +68,28 @@ class UserManager:
         except Exception as err:
             logger.error(f"Error loading users file: {err}", exc_info=True)
             return {}
+
+    # Step 5.2.1: Load profile OTPs from JSON file
+    def _load_profile_otps(self) -> dict:
+        """Load active profile OTPs from profile_otps.json."""
+        if not self.profile_otps_file.exists():
+            return {}
+        try:
+            with open(self.profile_otps_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as err:
+            logger.error(f"Error loading profile OTPs file: {err}")
+            return {}
+
+    # Step 5.2.2: Save profile OTPs to JSON file
+    def _save_profile_otps(self):
+        """Persist profile OTPs to profile_otps.json."""
+        try:
+            self.data_dir.mkdir(exist_ok=True)
+            with open(self.profile_otps_file, "w", encoding="utf-8") as f:
+                json.dump(self.profile_otps, f, indent=4)
+        except Exception as err:
+            logger.error(f"Error saving profile OTPs file: {err}")
 
     # Step 5.3: Persist user accounts dictionary to users.json file
     def _save_users(self):
@@ -100,11 +129,18 @@ class UserManager:
 
     # Step 5.6: Register a new user account and send registration welcome email
     def signup(
-        self, username: str, password: str, full_name: str = "", email: str = ""
+        self,
+        username: str,
+        password: str,
+        full_name: str = "",
+        email: str = "",
+        phone: str = "",
+        whatsapp_auto_send: bool = True,
     ) -> tuple[bool, str]:
         """Register a new user account and dispatch welcome email."""
         username = username.strip().lower()
         email = email.strip()
+        phone = phone.strip()
 
         # Step 5.6a: Validate minimum username length
         if not username or len(username) < 3:
@@ -131,6 +167,9 @@ class UserManager:
             "username": username,
             "full_name": full_name.strip(),
             "email": email,
+            "phone": phone,
+            "whatsapp_auto_send": bool(whatsapp_auto_send),
+            "profile_pic": "",
             "password_hash": hashed_password,
             "salt": salt,
         }
@@ -146,6 +185,157 @@ class UserManager:
             send_registration_email(email, username)
 
         return True, "User registered successfully! A welcome email has been sent."
+
+    # Step 5.6.1: Update existing user profile fields (phone, WhatsApp preferences, profile pic, etc.)
+    def update_user_profile(
+        self,
+        username: str,
+        phone: str = None,
+        whatsapp_auto_send: bool = None,
+        full_name: str = None,
+        email: str = None,
+        profile_pic: str = None,
+    ) -> tuple[bool, str]:
+        """Update user profile fields such as phone number, WhatsApp preferences, and profile picture."""
+        clean_user = username.strip().lower()
+        if clean_user not in self.users:
+            return False, "User not found."
+
+        user_data = self.users[clean_user]
+        if phone is not None:
+            user_data["phone"] = phone.strip()
+        if whatsapp_auto_send is not None:
+            user_data["whatsapp_auto_send"] = bool(whatsapp_auto_send)
+        if full_name is not None:
+            user_data["full_name"] = full_name.strip()
+        if email is not None:
+            user_data["email"] = email.strip()
+        if profile_pic is not None:
+            user_data["profile_pic"] = profile_pic.strip()
+
+        self.users[clean_user] = user_data
+        self._save_users()
+        logger.info(f"Updated profile for user '{clean_user}'.")
+        return True, "Profile updated successfully!"
+
+    # Step 5.6.1b: Save user profile picture file to isolated user directory
+    def save_profile_picture(self, username: str, image_bytes: bytes, file_extension: str = ".png") -> tuple[bool, str, str]:
+        """Save uploaded image bytes to user directory and update profile_pic field."""
+        clean_user = username.strip().lower()
+        if clean_user not in self.users:
+            return False, "User not found.", ""
+
+        user_dir = self.get_user_data_dir(clean_user)
+        ext = file_extension.lower() if file_extension.startswith(".") else f".{file_extension.lower()}"
+        filename = f"profile_pic{ext}"
+        target_path = user_dir / filename
+
+        try:
+            with open(target_path, "wb") as f:
+                f.write(image_bytes)
+
+            rel_path = str(target_path)
+            self.update_user_profile(clean_user, profile_pic=rel_path)
+            logger.info(f"Saved profile picture for user '{clean_user}' -> {rel_path}")
+            return True, "Profile picture updated successfully!", rel_path
+        except Exception as err:
+            logger.error(f"Error saving profile picture for '{clean_user}': {err}")
+            return False, f"Failed to save profile picture: {err}", ""
+
+    # Step 5.6.2: Request OTP to verify new Email Address
+    def request_email_change_otp(self, username: str, new_email: str) -> tuple[bool, str]:
+        """Generate and dispatch 6-digit OTP code to new email address."""
+        clean_user = username.strip().lower()
+        clean_email = new_email.strip()
+
+        if clean_user not in self.users:
+            return False, "User not found."
+
+        if not clean_email or "@" not in clean_email:
+            return False, "Please provide a valid email address."
+
+        if self.users[clean_user].get("email", "").strip().lower() == clean_email.lower():
+            return False, "This is already your current email address."
+
+        otp = f"{random.randint(100000, 999999)}"
+        expires_at = time.time() + OTP_EXPIRY_SECONDS
+
+        self.profile_otps[clean_user] = {
+            "type": "email",
+            "value": clean_email,
+            "otp": otp,
+            "expires_at": expires_at,
+        }
+        self._save_profile_otps()
+
+        ok, msg = send_email_update_otp(clean_email, clean_user, otp)
+        logger.info(f"Generated Email update OTP for user '{clean_user}' -> {clean_email}")
+        return True, f"OTP sent to {clean_email}. Please enter the 6-digit code to verify."
+
+    # Step 5.6.3: Request OTP to verify new WhatsApp Phone Number
+    def request_phone_change_otp(self, username: str, new_phone: str) -> tuple[bool, str, str, str]:
+        """
+        Generate and dispatch 6-digit OTP code to new phone number.
+        Returns (success, message, otp_code, wa_link).
+        """
+        clean_user = username.strip().lower()
+        clean_phone = new_phone.strip()
+
+        if clean_user not in self.users:
+            return False, "User not found.", "", ""
+
+        if not clean_phone or len(re.sub(r"\D", "", clean_phone)) < 10:
+            return False, "Please enter a valid 10-digit mobile phone number.", "", ""
+
+        otp = f"{random.randint(100000, 999999)}"
+        expires_at = time.time() + OTP_EXPIRY_SECONDS
+
+        self.profile_otps[clean_user] = {
+            "type": "phone",
+            "value": clean_phone,
+            "otp": otp,
+            "expires_at": expires_at,
+        }
+        self._save_profile_otps()
+
+        # Dispatch automated WhatsApp message via Meta API
+        ok, api_msg = send_phone_update_otp(clean_phone, clean_user, otp)
+        wa_link = generate_phone_update_otp_link(clean_phone, clean_user, otp)
+
+        logger.info(f"Generated Phone update OTP for user '{clean_user}' -> {clean_phone}")
+        return True, f"OTP created! WhatsApp Message Status: {api_msg}", otp, wa_link
+
+    # Step 5.6.4: Verify OTP code and apply pending profile change
+    def verify_profile_otp_and_update(self, username: str, input_otp: str) -> tuple[bool, str]:
+        """Verify the 6-digit profile OTP and update the profile field."""
+        clean_user = username.strip().lower()
+        # Reload profile OTPs from disk to get latest state
+        self.profile_otps = self._load_profile_otps()
+        entry = self.profile_otps.get(clean_user)
+
+        if not entry:
+            return False, "No active profile update request found. Please request a new OTP."
+
+        if time.time() > entry["expires_at"]:
+            del self.profile_otps[clean_user]
+            self._save_profile_otps()
+            return False, "OTP code has expired. Please request a new OTP."
+
+        if entry["otp"].strip() != input_otp.strip():
+            return False, "Invalid OTP code. Please check and try again."
+
+        field_type = entry["type"]
+        new_val = entry["value"]
+
+        user_data = self.users[clean_user]
+        user_data[field_type] = new_val
+        self.users[clean_user] = user_data
+        self._save_users()
+
+        del self.profile_otps[clean_user]
+        self._save_profile_otps()
+        logger.info(f"Verified profile OTP for '{clean_user}': Updated {field_type} -> {new_val}")
+        return True, f"Success! Your {field_type.capitalize()} has been updated to '{new_val}'."
 
     # Step 5.7: Authenticate user credentials against stored hash and salt
     def login(self, username: str, password: str) -> tuple[bool, str, dict]:

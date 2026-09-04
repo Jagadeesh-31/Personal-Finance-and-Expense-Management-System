@@ -1,12 +1,25 @@
+import base64
 import io
+import os
 import pandas as pd
 import streamlit as st
 from pathlib import Path
 from logger_config import get_logger
 from auth import UserManager
+from email_service import send_monthly_report_email
+from whatsapp_service import (
+    generate_whatsapp_web_link,
+    format_monthly_report_message,
+    send_whatsapp_message,
+    dispatch_user_monthly_report,
+    _load_env,
+)
 
+_load_env()
 logger = get_logger("streamlit_app")
-auth_manager = UserManager()
+if "auth_manager" not in st.session_state:
+    st.session_state.auth_manager = UserManager()
+auth_manager = st.session_state.auth_manager
 
 # Step 2: Define base paths and constants
 ROOT = Path(__file__).resolve().parent
@@ -282,6 +295,8 @@ if not st.session_state.authenticated:
             signup_user = st.text_input("Desired Username")
             signup_name = st.text_input("Full Name")
             signup_email = st.text_input("Email Address")
+            signup_phone = st.text_input("WhatsApp Phone Number (e.g. +919876543210)")
+            whatsapp_auto = st.checkbox("Enable Automated Monthly WhatsApp Reports & Reminders", value=True)
             signup_pass = st.text_input("Password", type="password")
             signup_pass_confirm = st.text_input("Confirm Password", type="password")
             signup_btn = st.form_submit_button("Sign Up", use_container_width=True)
@@ -290,7 +305,14 @@ if not st.session_state.authenticated:
                 if signup_pass != signup_pass_confirm:
                     st.error("Passwords do not match. Please re-enter your password.")
                 else:
-                    success, msg = auth_manager.signup(signup_user, signup_pass, signup_name, signup_email)
+                    success, msg = auth_manager.signup(
+                        signup_user,
+                        signup_pass,
+                        signup_name,
+                        signup_email,
+                        signup_phone,
+                        whatsapp_auto,
+                    )
                     if success:
                         st.success(msg + " You can now log in using your credentials.")
                     else:
@@ -338,10 +360,57 @@ if not st.session_state.authenticated:
 
     st.stop()  # Stop execution here if user is not authenticated
 
+# Helper function for base64 sidebar avatar encoding
+def get_image_base64(image_path: str) -> str:
+    """Convert local image file to base64 data URI string for HTML rendering."""
+    try:
+        with open(image_path, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode("utf-8")
+            ext = Path(image_path).suffix.lstrip(".").lower()
+            mime = "image/png" if ext == "png" else f"image/{ext}"
+            return f"data:{mime};base64,{encoded}"
+    except Exception:
+        return ""
+
 # Logged in UI User Header in Sidebar
-st.sidebar.markdown(f"### 👤 Logged in as")
-display_name = st.session_state.user_info.get("full_name") or st.session_state.username
-st.sidebar.markdown(f"**{display_name}** (`@{st.session_state.username}`)")
+username = st.session_state.username
+user_info = auth_manager.users.get(username, st.session_state.get("user_info", {}))
+st.session_state.user_info = user_info
+
+full_name = user_info.get("full_name") or username
+email = user_info.get("email") or "Not provided"
+phone = user_info.get("phone") or "Not provided"
+auto_wa = user_info.get("whatsapp_auto_send", True)
+profile_pic = user_info.get("profile_pic", "")
+wa_badge = "<span style='color:#16a34a; font-weight:bold;'>Active 🟢</span>" if auto_wa else "<span style='color:#dc2626; font-weight:bold;'>Disabled 🔴</span>"
+
+# Display profile avatar image or default emoji inside card
+avatar_html = '<div style="font-size: 32px; margin-right: 12px; line-height: 1;">👤</div>'
+if profile_pic and os.path.exists(profile_pic):
+    img_b64 = get_image_base64(profile_pic)
+    if img_b64:
+        avatar_html = f'<img src="{img_b64}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; margin-right: 12px; border: 2px solid #2563eb; flex-shrink: 0;" />'
+
+st.sidebar.markdown(
+    f"""
+    <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
+        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+            {avatar_html}
+            <div style="overflow: hidden;">
+                <div style="font-size: 16px; font-weight: 700; color: #0f172a; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{full_name}</div>
+                <div style="font-size: 13px; color: #2563eb; font-weight: 600;">@{username}</div>
+            </div>
+        </div>
+        <hr style="margin: 10px 0; border: 0; border-top: 1px solid #e2e8f0;" />
+        <div style="font-size: 12px; color: #334155; line-height: 1.8;">
+            <div>📧 <b>Email:</b> {email}</div>
+            <div>📱 <b>Phone:</b> {phone}</div>
+            <div>📲 <b>WhatsApp Auto-Send:</b> {wa_badge}</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if st.sidebar.button("🚪 Logout", use_container_width=True):
     st.session_state.authenticated = False
@@ -350,7 +419,7 @@ if st.sidebar.button("🚪 Logout", use_container_width=True):
     st.rerun()
 
 st.sidebar.markdown("---")
-st.title(f"Personal Finance Management System - Welcome, {display_name}!")
+st.title(f"Personal Finance Management System - Welcome, {full_name}!")
 
 
 # Step 8: Define menu navigation items and render sidebar radio selector.
@@ -373,6 +442,7 @@ menu_items = [
     "Delete Expense",
     "Savings Goal",
     "Export Financial Report",
+    "WhatsApp Settings & Direct Share",
 ]
 
 menu = []
@@ -388,55 +458,107 @@ ensure_data_files()
 
 # Step 10.1: Add Income Form Handler
 if choice == "1. Add Income":
+    st.subheader("➕ Add Income Entry")
+    income_categories = [
+        "Salary",
+        "Freelance / Side Hustle",
+        "Business Revenue",
+        "Investment / Dividends",
+        "Rental Income",
+        "Bonus / Reward",
+        "Gift",
+        "Other (Type custom category below)",
+    ]
+
     with st.form("add_income_form"):
         income_amount = st.number_input("Amount", value=None, min_value=0.0, step=100.0, placeholder="Enter income amount")
-        income_category = st.text_input("Category")
-        income_source = st.text_input("Source")
-        income_description = st.text_input("Description")
-        submitted = st.form_submit_button("Add Income")
+        income_category_select = st.selectbox("Select Income Category", income_categories)
+        income_category_custom = st.text_input("Custom Category (Optional if 'Other' selected)", placeholder="e.g. Consulting, Royalties")
+        income_source = st.text_input("Source / Payer", placeholder="e.g. Company Name, Client Name, Bank")
+        income_description = st.text_input("Description", placeholder="e.g. Monthly salary payout")
+        submitted = st.form_submit_button("Add Income", use_container_width=True)
 
     if submitted:
         if income_amount is None or income_amount <= 0:
             st.error("Please enter a valid amount greater than 0.")
         else:
+            final_category = (
+                income_category_custom.strip()
+                if "Other" in income_category_select and income_category_custom.strip()
+                else income_category_select
+            )
             df = load_income()
             new_row = {
                 "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
                 "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "amount": income_amount,
-                "category": income_category,
-                "source": income_source,
-                "description": income_description,
+                "category": final_category,
+                "source": income_source.strip(),
+                "description": income_description.strip(),
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             save_income(df)
-            st.success(f"Income of {CURRENCY} {income_amount:,.2f} added successfully.")
+            st.success(f"Income of {CURRENCY} {income_amount:,.2f} under '{final_category}' added successfully.")
 
 # Step 10.2: Add Expense Form Handler
 elif choice == "2. Add Expense":
+    st.subheader("➖ Add Expense Entry")
+    expense_categories = [
+        "Food & Dining",
+        "Groceries",
+        "Rent & Housing",
+        "Bills & Utilities",
+        "Transport / Fuel",
+        "Shopping & Clothing",
+        "Entertainment & Leisure",
+        "Health & Medical",
+        "Education",
+        "Travel & Vacation",
+        "Subscriptions & Software",
+        "EMI & Loan",
+        "Savings & Investment",
+        "Other (Type custom category below)",
+    ]
+
+    payment_methods = [
+        "UPI (GPay / PhonePe / Paytm)",
+        "Credit Card",
+        "Debit Card",
+        "Cash",
+        "Net Banking",
+        "Bank Transfer",
+        "Other",
+    ]
+
     with st.form("add_expense_form"):
         expense_amount = st.number_input("Amount", value=None, min_value=0.0, step=50.0, placeholder="Enter expense amount")
-        expense_category = st.text_input("Category")
-        expense_payment = st.text_input("Payment Method")
-        expense_description = st.text_input("Description")
-        submitted = st.form_submit_button("Add Expense")
+        expense_category_select = st.selectbox("Select Expense Category", expense_categories)
+        expense_category_custom = st.text_input("Custom Category (Optional if 'Other' selected)", placeholder="e.g. Repairs, Pet Care")
+        expense_payment = st.selectbox("Payment Method", payment_methods)
+        expense_description = st.text_input("Description", placeholder="e.g. Dinner with friends, Monthly groceries")
+        submitted = st.form_submit_button("Add Expense", use_container_width=True)
 
     if submitted:
         if expense_amount is None or expense_amount <= 0:
             st.error("Please enter a valid amount greater than 0.")
         else:
+            final_category = (
+                expense_category_custom.strip()
+                if "Other" in expense_category_select and expense_category_custom.strip()
+                else expense_category_select
+            )
             df = load_expenses()
             new_row = {
                 "date": pd.Timestamp.today().strftime("%Y-%m-%d"),
                 "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "amount": expense_amount,
-                "category": expense_category,
+                "category": final_category,
                 "payment": expense_payment,
-                "description": expense_description,
+                "description": expense_description.strip(),
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             save_expenses(df)
-            st.success(f"Expense of {CURRENCY} {expense_amount:,.2f} added successfully.")
+            st.success(f"Expense of {CURRENCY} {expense_amount:,.2f} under '{final_category}' added successfully.")
 
 # Step 10.3: View Income Table Handler & Interactive Editor
 elif choice == "3. View Income":
@@ -754,8 +876,230 @@ elif choice == "18. Export Financial Report":
             file_name="financial_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+        st.markdown("---")
+        st.subheader("📲 WhatsApp Report Delivery")
+
+        user_info = st.session_state.get("user_info", {})
+        current_month = get_month_label()
+        user_phone = user_info.get("phone", "")
+
+        # Format message & check if empty or filled
+        msg_text, is_empty = format_monthly_report_message(
+            st.session_state.username, current_month, income_df, expense_df, budget_df
+        )
+
+        if is_empty:
+            st.warning("⚠️ Report is empty for this month (0 Income & 0 Expenses). The WhatsApp message generated is a reminder alert.")
+        else:
+            st.info("📊 Report contains financial data. Full summary will be shared via WhatsApp.")
+
+        # Interactive WhatsApp Web Link Button (100% Free)
+        wa_link = generate_whatsapp_web_link(user_phone, msg_text)
+        st.link_button("🟢 Share Report via WhatsApp Web Link (Free)", wa_link, use_container_width=True)
+
+        # Trigger Automated Direct WhatsApp Message via Meta Cloud API
+        if st.button("🤖 Send Direct WhatsApp Message via Meta API", use_container_width=True):
+            if not user_phone:
+                st.error("Please add a WhatsApp phone number in '19. WhatsApp Settings & Direct Share'.")
+            else:
+                ok, res_msg, _ = dispatch_user_monthly_report(
+                    user_info, current_month, income_df, expense_df, budget_df, trigger_source="export_button"
+                )
+                if ok:
+                    st.success(f"Direct WhatsApp notification sent! ({res_msg})")
+                else:
+                    st.warning(f"Notice: {res_msg}")
+
+        # Email Report Delivery Section
+        st.markdown("---")
+        st.subheader("📧 Email Report Delivery")
+        user_email = user_info.get("email", "")
+
+        if st.button("📧 Dispatch Financial Report to Registered Email", use_container_width=True):
+            if not user_email:
+                st.error("No registered email address found for your account.")
+            else:
+                inc_tot = total_income()
+                exp_tot = total_expense()
+                sav_tot = monthly_savings_value()
+                bdg_tot = float(budget_df["budget"].sum()) if not budget_df.empty else 0.0
+                ok_email, email_status = send_monthly_report_email(
+                    user_email, st.session_state.username, current_month, inc_tot, exp_tot, sav_tot, bdg_tot
+                )
+                if ok_email:
+                    st.success(f"Email report successfully sent to '{user_email}'!")
+                else:
+                    st.warning(f"Email delivery status: {email_status}")
+
+        # Auto-trigger WhatsApp & Email on export if enabled
+        if user_info.get("whatsapp_auto_send") and not st.session_state.get("wa_exported_already"):
+            st.session_state["wa_exported_already"] = True
+            if user_phone:
+                ok, auto_msg, _ = dispatch_user_monthly_report(
+                    user_info, current_month, income_df, expense_df, budget_df, trigger_source="auto_export"
+                )
+                st.caption(f"🤖 Automated WhatsApp Export Trigger: {auto_msg}")
+            if user_email:
+                inc_tot = total_income()
+                exp_tot = total_expense()
+                sav_tot = monthly_savings_value()
+                bdg_tot = float(budget_df["budget"].sum()) if not budget_df.empty else 0.0
+                ok_email, email_status = send_monthly_report_email(
+                    user_email, st.session_state.username, current_month, inc_tot, exp_tot, sav_tot, bdg_tot
+                )
+                st.caption(f"📧 Automated Email Export Trigger: {email_status}")
+
     except ModuleNotFoundError:
         st.error("Excel export needs openpyxl. Install it with: pip install -r requirements.txt")
+
+# Step 10.19: User Profile & WhatsApp Security Handler
+elif choice == "19. WhatsApp Settings & Direct Share":
+    st.subheader("👤 User Profile & WhatsApp Security Settings")
+
+    username = st.session_state.username
+    user_info = auth_manager.users.get(username, {})
+    current_name = user_info.get("full_name", "")
+    current_email = user_info.get("email", "")
+    current_phone = user_info.get("phone", "")
+    current_auto = user_info.get("whatsapp_auto_send", True)
+
+    # -------------------------------------------------------------
+    # SECTION 1: General Preferences (Full Name & Auto-Send)
+    # -------------------------------------------------------------
+    st.markdown("### 1. General Account Preferences")
+    with st.form("general_profile_form"):
+        new_name = st.text_input("Full Name", value=current_name)
+        new_auto = st.checkbox("Enable Automated Monthly WhatsApp Reports & Reminders", value=current_auto)
+        save_gen_btn = st.form_submit_button("Save General Preferences")
+
+        if save_gen_btn:
+            ok, msg = auth_manager.update_user_profile(username, full_name=new_name, whatsapp_auto_send=new_auto)
+            if ok:
+                st.session_state.user_info["full_name"] = new_name
+                st.session_state.user_info["whatsapp_auto_send"] = new_auto
+                st.success("General preferences updated successfully!")
+                st.rerun()
+
+    st.markdown("---")
+
+    # -------------------------------------------------------------
+    # SECTION 1B: 📸 Profile Picture Upload & Management
+    # -------------------------------------------------------------
+    st.markdown("### 📸 Profile Picture Upload")
+    pic_col1, pic_col2 = st.columns([1, 2])
+    with pic_col1:
+        current_pic = user_info.get("profile_pic", "")
+        if current_pic and os.path.exists(current_pic):
+            st.image(current_pic, caption="Current Profile Picture", width=140)
+        else:
+            st.info("No custom profile picture uploaded yet.")
+
+    with pic_col2:
+        uploaded_pic = st.file_uploader("Upload new profile picture (PNG, JPG, WEBP)", type=["png", "jpg", "jpeg", "webp"])
+        if uploaded_pic is not None:
+            if st.button("🖼️ Save Profile Picture", use_container_width=True):
+                ext = os.path.splitext(uploaded_pic.name)[1]
+                ok, pic_msg, rel_path = auth_manager.save_profile_picture(
+                    username, uploaded_pic.getvalue(), file_extension=ext
+                )
+                if ok:
+                    st.session_state.user_info["profile_pic"] = rel_path
+                    st.success(pic_msg)
+                    st.rerun()
+                else:
+                    st.error(pic_msg)
+
+        if current_pic and os.path.exists(current_pic):
+            if st.button("🗑️ Remove Profile Picture"):
+                auth_manager.update_user_profile(username, profile_pic="")
+                st.session_state.user_info["profile_pic"] = ""
+                st.success("Profile picture removed!")
+                st.rerun()
+
+    st.markdown("---")
+
+    # -------------------------------------------------------------
+    # SECTION 2: 2FA OTP Email Update
+    # -------------------------------------------------------------
+    st.markdown("### 2. 📧 Email Address Update (2FA OTP Secured)")
+    st.caption(f"Current Email: **{current_email or 'Not set'}**")
+
+    col_e1, col_e2 = st.columns(2)
+    with col_e1:
+        new_email_input = st.text_input("Enter New Email Address", placeholder="e.g. user@example.com", key="new_email_input")
+        if st.button("📩 Request Email Update OTP", use_container_width=True):
+            ok, email_msg = auth_manager.request_email_change_otp(username, new_email_input)
+            if ok:
+                st.success(email_msg)
+            else:
+                st.error(email_msg)
+
+    with col_e2:
+        email_otp_input = st.text_input("Enter 6-Digit Email OTP Code", key="email_otp_input")
+        if st.button("✅ Verify & Save New Email", use_container_width=True):
+            ok, verify_msg = auth_manager.verify_profile_otp_and_update(username, email_otp_input)
+            if ok:
+                st.success(verify_msg)
+                st.rerun()
+            else:
+                st.error(verify_msg)
+
+    st.markdown("---")
+
+    # -------------------------------------------------------------
+    # SECTION 3: 2FA OTP WhatsApp Phone Update
+    # -------------------------------------------------------------
+    st.markdown("### 3. 📱 WhatsApp Phone Number Update (2FA OTP Secured)")
+    st.caption(f"Current Phone: **{current_phone or 'Not set'}**")
+
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        new_phone_input = st.text_input("Enter New Mobile Phone Number", placeholder="e.g. +919876543210", key="new_phone_input")
+        if st.button("📲 Request WhatsApp Phone OTP", use_container_width=True):
+            ok, phone_msg, otp_code, wa_link = auth_manager.request_phone_change_otp(username, new_phone_input)
+            if ok:
+                st.session_state["pending_phone_wa_link"] = wa_link
+                st.success("🔒 OTP created! Click the green button below to send/view it via WhatsApp:")
+            else:
+                st.error(phone_msg)
+
+        if "pending_phone_wa_link" in st.session_state and st.session_state["pending_phone_wa_link"]:
+            st.info("ℹ️ **Pop-up Notice:** Clicking the button below will open WhatsApp in a new tab with your verification OTP pre-filled.")
+            st.toast("📲 WhatsApp OTP link ready! Opening in a new tab.", icon="💬")
+            st.link_button("🟢 Click Here to Send OTP via WhatsApp", st.session_state["pending_phone_wa_link"], use_container_width=True)
+
+    with col_p2:
+        phone_otp_input = st.text_input("Enter 6-Digit Phone OTP Code", key="phone_otp_input")
+        if st.button("✅ Verify & Save New Phone Number", use_container_width=True):
+            ok, verify_msg = auth_manager.verify_profile_otp_and_update(username, phone_otp_input)
+            if ok:
+                if "pending_phone_wa_link" in st.session_state:
+                    del st.session_state["pending_phone_wa_link"]
+                if "pending_phone_otp" in st.session_state:
+                    del st.session_state["pending_phone_otp"]
+                st.success(verify_msg)
+                st.rerun()
+            else:
+                st.error(verify_msg)
+
+    st.markdown("---")
+    st.subheader("📲 Instant Interactive WhatsApp Report Test")
+
+    income_df = load_income()
+    expense_df = load_expenses()
+    budget_df = load_budget()
+    current_month = get_month_label()
+
+    msg_text, is_empty = format_monthly_report_message(username, current_month, income_df, expense_df, budget_df)
+
+    st.markdown("### Message Preview:")
+    st.code(msg_text, language="text")
+
+    wa_link = generate_whatsapp_web_link(current_phone, msg_text)
+    st.info("ℹ️ **Pop-up Notice:** Clicking the button below will open WhatsApp in a new tab with your monthly financial report pre-filled.")
+    st.toast("💬 WhatsApp report link ready! Click below to send.", icon="🚀")
+    st.link_button("📲 Click to Open in WhatsApp Web / App", wa_link, use_container_width=True)
 
 # Default Fallback Prompt
 else:

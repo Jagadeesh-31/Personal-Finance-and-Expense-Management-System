@@ -18,11 +18,32 @@ A Python application for recording income and expenses, managing monthly budgets
 - Monthly financial reports
 - Financial summary
 - Streamlit dashboard with authentication portal, search, delete, savings goal, and Excel export
+- WhatsApp Integration: Interactive WhatsApp Web pre-filled sharing (`wa.me`) & automated direct delivery via Meta WhatsApp Cloud API
+- Smart WhatsApp Content: Dispatches full financial reports for active months and automated reminder alerts (*"You did not record any income/expenses this month"*) for empty months
+- Dual Triggers: Automatic monthly completion dispatch & instant trigger on "Export Report" button click
 - Centralized logging & Pytest automated test suite
 - Transaction tables with row numbers starting at 1
 
 
-## Requirements
+## WhatsApp Configuration & Automated Scheduler
+
+### 1. Interactive WhatsApp Sharing (100% Free)
+Click the **"📲 Share Report via WhatsApp Web Link"** button in the Streamlit app to open WhatsApp Web or Mobile with your pre-filled report or reminder alert.
+
+### 2. Meta WhatsApp Cloud API (Automated Direct Messaging)
+To enable background direct messaging:
+1. Copy `.env.example` to `.env`.
+2. Add your Meta WhatsApp API Token and Sender Phone Number ID:
+   ```env
+   META_WHATSAPP_TOKEN=your_meta_token_here
+   META_PHONE_NUMBER_ID=your_meta_phone_number_id_here
+   ```
+
+### 3. Automated Monthly Background Dispatcher
+To run the automated monthly WhatsApp dispatch for all registered accounts:
+```bash
+python monthly_scheduler.py
+```
 
 - Python 3.11 or later
 - pandas

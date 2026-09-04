@@ -7,11 +7,11 @@ from logger_config import get_logger
 # Step 1: Initialize namespaced logger for email dispatch tracking
 logger = get_logger("email_service")
 
-# Step 2: Read SMTP Configuration defaults (can be overridden via environment variables)
+# Step 2: Read SMTP Configuration defaults from environment variables
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "jagatic3384@gmail.com")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "vtwngrathxatgokz").replace(" ", "")
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USERNAME)
 
 
@@ -172,3 +172,103 @@ def send_password_changed_email(to_email: str, username: str) -> tuple[bool, str
 
     # Step 6.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)
+
+
+# Step 7: Dispatch Email Update Verification OTP.
+def send_email_update_otp(to_email: str, username: str, otp: str) -> tuple[bool, str]:
+    """Send 6-digit OTP code to verify new email address update."""
+    subject = f"Verify Your New Email Address OTP: {otp}"
+
+    body_text = (
+        f"Hello {username},\n\n"
+        f"We received a request to update the email address for account '{username}' to: {to_email}.\n\n"
+        f"Your Email Verification OTP is: {otp}\n\n"
+        f"This OTP is valid for 5 minutes. Enter this code in the app to confirm your new email.\n\n"
+        f"Best regards,\nPersonal Finance Team"
+    )
+
+    body_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
+          <h2 style="color: #2b5876; margin-top: 0;">Email Update Verification</h2>
+          <p>Hello <strong>{username}</strong>,</p>
+          <p>Use the following 6-digit OTP code to confirm your new email address (<strong>{to_email}</strong>):</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2b5876; background-color: #eef2f5; padding: 10px 20px; border-radius: 6px;">{otp}</span>
+          </div>
+          <p style="color: #e74c3c;"><strong>Note:</strong> This OTP is valid for <strong>5 minutes</strong>.</p>
+        </div>
+      </body>
+    </html>
+    """
+
+    return send_email(to_email, subject, body_text, body_html)
+
+
+# Step 8: Dispatch Monthly Financial Report Email
+def send_monthly_report_email(
+    to_email: str,
+    username: str,
+    month: str,
+    income_total: float,
+    expense_total: float,
+    savings_total: float,
+    budget_total: float,
+) -> tuple[bool, str]:
+    """Send beautifully formatted HTML Monthly Financial Report email to user."""
+    subject = f"📊 Monthly Financial Report for {month} - Personal Finance"
+
+    rem_budget = budget_total - expense_total
+    budget_status = f"Under budget by Rs. {rem_budget:,.2f}" if rem_budget >= 0 else f"OVER budget by Rs. {abs(rem_budget):,.2f}"
+
+    body_text = (
+        f"Hello {username},\n\n"
+        f"Here is your Personal Financial Report for {month}:\n\n"
+        f"Total Income   : Rs. {income_total:,.2f}\n"
+        f"Total Expenses : Rs. {expense_total:,.2f}\n"
+        f"Monthly Savings: Rs. {savings_total:,.2f}\n"
+        f"Budget Summary : {budget_status}\n\n"
+        f"Best regards,\nPersonal Finance Team"
+    )
+
+    body_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <h2 style="color: #1e293b; margin-top: 0; font-size: 22px;">📊 Monthly Financial Report ({month})</h2>
+          <p>Hello <strong>{username}</strong>,</p>
+          <p>Here is a summary of your financial health for the month of <strong>{month}</strong>:</p>
+
+          <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; border: 1px solid #cbd5e1; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; font-weight: bold; color: #1e293b;">💵 Total Income</td>
+                <td style="padding: 10px 0; text-align: right; color: #16a34a; font-weight: bold; font-size: 16px;">Rs. {income_total:,.2f}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; font-weight: bold; color: #1e293b;">💸 Total Expenses</td>
+                <td style="padding: 10px 0; text-align: right; color: #dc2626; font-weight: bold; font-size: 16px;">Rs. {expense_total:,.2f}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; font-weight: bold; color: #1e293b;">📈 Monthly Savings</td>
+                <td style="padding: 10px 0; text-align: right; color: #2563eb; font-weight: bold; font-size: 16px;">Rs. {savings_total:,.2f}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; font-weight: bold; color: #1e293b;">🎯 Budget Status</td>
+                <td style="padding: 10px 0; text-align: right; color: #475569; font-weight: bold;">{budget_status}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="font-size: 13px; color: #64748b;">Generated automatically by your Personal Finance Management System.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #94a3b8; text-align: center;">Personal Finance App &bull; Keep your goals on track</p>
+        </div>
+      </body>
+    </html>
+    """
+
+    return send_email(to_email, subject, body_text, body_html)
+
+
