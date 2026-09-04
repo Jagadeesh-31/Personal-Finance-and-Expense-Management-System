@@ -71,8 +71,11 @@ class FinanceGUIApp(tk.Tk):
         self.user_status_label = ttk.Label(user_frame, text="", style="SubHeader.TLabel")
         self.user_status_label.pack(side="left", padx=10)
 
-        switch_btn = ttk.Button(user_frame, text="👤 Switch / Log In Account", command=self.open_account_dialog)
-        switch_btn.pack(side="right", padx=5)
+        login_btn = ttk.Button(user_frame, text="🔑 Log In", command=self.open_account_dialog)
+        login_btn.pack(side="left", padx=4)
+
+        logout_btn = ttk.Button(user_frame, text="🚪 Log Out", command=self.handle_logout)
+        logout_btn.pack(side="left", padx=4)
 
         # Main layout container
         main_container = ttk.Frame(self, style="Main.TFrame", padding=15)
@@ -173,6 +176,19 @@ class FinanceGUIApp(tk.Tk):
 
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
+
+    def handle_logout(self):
+        """Log out current user and return to Guest mode."""
+        if self.current_user == "default":
+            messagebox.showinfo("Notice", "You are currently in Guest mode.")
+            return
+
+        if messagebox.askyesno("Log Out", f"Are you sure you want to log out from account '@{self.current_user}'?"):
+            self.current_user = "default"
+            self.user_info = {"full_name": "Guest User", "email": "guest@local"}
+            self.manager = FinanceManager(username=self.current_user)
+            self.refresh()
+            messagebox.showinfo("Logged Out", "You have been logged out successfully.")
 
     def open_account_dialog(self):
         """Open a dialog window to log in, sign up, or switch accounts."""
