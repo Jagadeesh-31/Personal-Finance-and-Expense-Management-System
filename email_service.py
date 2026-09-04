@@ -77,7 +77,9 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         msg["Reply-To"] = sender_email
         msg["Date"] = formatdate(localtime=True)
         msg["Message-ID"] = make_msgid(domain="gmail.com")
-        msg["X-Mailer"] = "Python-PersonalFinanceApp/2.0"
+        msg["X-Mailer"] = "PersonalFinanceApp/2.0"
+        msg["Auto-Submitted"] = "auto-generated"
+        msg["X-Auto-Response-Suppress"] = "All"
 
         # Step 3.5: Attach plain text and optional HTML body parts
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
@@ -258,7 +260,7 @@ def send_monthly_report_email(
     budget_total: float,
 ) -> tuple[bool, str]:
     """Send beautifully formatted HTML Monthly Financial Report email to user."""
-    subject = f"📊 Monthly Financial Report for {month} - Personal Finance"
+    subject = f"Monthly Financial Statement for {month} - {username}"
 
     rem_budget = budget_total - expense_total
     budget_status = f"Under budget by Rs. {rem_budget:,.2f}" if rem_budget >= 0 else f"OVER budget by Rs. {abs(rem_budget):,.2f}"
