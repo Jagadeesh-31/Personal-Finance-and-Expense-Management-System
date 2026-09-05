@@ -8,6 +8,7 @@ from pathlib import Path
 from logger_config import get_logger
 from email_service import (
     send_registration_email,
+    send_signup_otp_email,
     send_otp_email,
     send_password_changed_email,
     send_email_update_otp,
@@ -55,6 +56,7 @@ class UserManager:
         self.profile_otps_file = self.data_dir / "profile_otps.json"
         self.users = self._load_users()
         self.otps = {}  # In-memory OTP storage for password reset: {username: {"otp": str, "expires_at": float}}
+        self.signup_otps = {}  # In-memory OTP storage for sign-up verification: {username: dict}
         self.profile_otps = self._load_profile_otps()
 
     # Step 5.2: Load user accounts dictionary from users.json file
@@ -126,6 +128,100 @@ class UserManager:
                 return user_info
 
         return None
+
+    # Step 5.5.1: Request Sign-Up OTP code and store pending registration details
+    def request_signup_otp(
+        self,
+        username: str,
+        password: str,
+        full_name: str = "",
+        email: str = "",
+        phone: str = "",
+        whatsapp_auto_send: bool = True,
+    ) -> tuple[bool, str]:
+        """Validate registration inputs, generate a 6-digit OTP code, and dispatch verification email."""
+        username = username.strip().lower()
+        email = email.strip()
+        phone = phone.strip()
+
+        if not username or len(username) < 3:
+            return False, "Username must be at least 3 characters long."
+
+        if not password or len(password) < 4:
+            return False, "Password must be at least 4 characters long."
+
+        if not email or "@" not in email or "." not in email:
+            return False, "A valid email address is required to receive verification OTP."
+
+        if username in self.users:
+            logger.warning(f"Signup OTP request failed: Username '{username}' already exists.")
+            return False, "Username already exists. Please choose a different one."
+
+        # Check duplicate email registration
+        for u in self.users.values():
+            if u.get("email", "").strip().lower() == email.lower():
+                return False, f"Email address '{email}' is already registered to another account."
+
+        # Generate 6-digit numeric OTP code
+        otp = f"{random.randint(100000, 999999)}"
+        expires_at = time.time() + OTP_EXPIRY_SECONDS
+
+        self.signup_otps[username] = {
+            "otp": otp,
+            "expires_at": expires_at,
+            "password": password,
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+            "whatsapp_auto_send": whatsapp_auto_send,
+        }
+
+        sent, msg = send_signup_otp_email(email, username, otp)
+        if sent:
+            logger.info(f"Signup OTP dispatched to '{email}' for username '{username}'.")
+            return True, f"Verification OTP sent to '{email}'! Please check your inbox (or Spam folder)."
+        else:
+            logger.error(f"Failed to dispatch signup OTP to '{email}': {msg}")
+            return False, f"Failed to send verification email: {msg}"
+
+    # Step 5.5.2: Verify Sign-Up OTP code and complete account registration
+    def verify_signup_otp_and_create_account(
+        self,
+        username: str,
+        otp: str,
+    ) -> tuple[bool, str]:
+        """Verify 6-digit sign-up OTP code and create the user account."""
+        username = username.strip().lower()
+        otp = otp.strip()
+
+        if username not in self.signup_otps:
+            return False, "No pending sign-up request found for this username. Please request a new OTP code."
+
+        entry = self.signup_otps[username]
+
+        if time.time() > entry["expires_at"]:
+            del self.signup_otps[username]
+            return False, "Verification OTP code has expired (valid for 5 minutes). Please request a new OTP code."
+
+        if entry["otp"] != otp:
+            return False, "Invalid OTP verification code. Please check your email and try again."
+
+        # OTP match confirmed! Proceed to user creation
+        success, msg = self.signup(
+            username=username,
+            password=entry["password"],
+            full_name=entry["full_name"],
+            email=entry["email"],
+            phone=entry["phone"],
+            whatsapp_auto_send=entry["whatsapp_auto_send"],
+        )
+
+        if success:
+            del self.signup_otps[username]
+            logger.info(f"Account '{username}' verified via OTP and created successfully.")
+            return True, "Account successfully verified and created! You can now log in."
+        else:
+            return False, msg
 
     # Step 5.6: Register a new user account and send registration welcome email
     def signup(

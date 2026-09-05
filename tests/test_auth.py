@@ -143,3 +143,34 @@ def test_profile_picture_upload(temp_data_dir):
     user_info = auth.users.get("picuser")
     assert user_info["profile_pic"] == rel_path
 
+
+def test_signup_otp_workflow(temp_data_dir, mock_email_service):
+    auth = UserManager()
+
+    with patch("auth.send_signup_otp_email", return_value=(True, "Mocked signup OTP sent")) as m_signup_otp:
+        # Step 1: Request Signup OTP
+        ok, msg = auth.request_signup_otp("newuser", "securepass123", "New User", "newuser@example.com", "+919876543210")
+        assert ok is True
+        assert "verification otp sent" in msg.lower()
+
+        assert "newuser" in auth.signup_otps
+        otp_code = auth.signup_otps["newuser"]["otp"]
+        m_signup_otp.assert_called_once_with("newuser@example.com", "newuser", otp_code)
+
+        # Step 2: Attempt verification with invalid OTP
+        bad_ok, bad_msg = auth.verify_signup_otp_and_create_account("newuser", "000000")
+        assert bad_ok is False
+        assert "invalid otp" in bad_msg.lower()
+
+        # Step 3: Verify with valid OTP
+        good_ok, good_msg = auth.verify_signup_otp_and_create_account("newuser", otp_code)
+        assert good_ok is True
+        assert "account successfully verified" in good_msg.lower()
+
+        # Verify user is created in system and can log in
+        assert "newuser" in auth.users
+        log_ok, _, user_info = auth.login("newuser", "securepass123")
+        assert log_ok is True
+        assert user_info["email"] == "newuser@example.com"
+
+

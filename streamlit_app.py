@@ -292,21 +292,23 @@ if not st.session_state.authenticated:
 
     with tab_signup:
         st.subheader("Create New User Account")
-        with st.form("signup_form"):
-            signup_user = st.text_input("Desired Username")
-            signup_name = st.text_input("Full Name")
-            signup_email = st.text_input("Email Address")
-            signup_phone = st.text_input("WhatsApp Phone Number (e.g. +919876543210)")
+        st.info("💡 An email verification OTP code will be sent to your email to verify your address and complete registration.")
+        
+        with st.form("signup_request_form"):
+            signup_user = st.text_input("Desired Username", value=st.session_state.get("signup_pending_user", ""))
+            signup_name = st.text_input("Full Name", value=st.session_state.get("signup_pending_name", ""))
+            signup_email = st.text_input("Email Address", value=st.session_state.get("signup_pending_email", ""))
+            signup_phone = st.text_input("WhatsApp Phone Number (e.g. +919876543210)", value=st.session_state.get("signup_pending_phone", ""))
             whatsapp_auto = st.checkbox("Enable Automated Monthly WhatsApp Reports & Reminders", value=True)
             signup_pass = st.text_input("Password", type="password")
             signup_pass_confirm = st.text_input("Confirm Password", type="password")
-            signup_btn = st.form_submit_button("Sign Up", use_container_width=True)
+            send_signup_otp_btn = st.form_submit_button("📩 Send Email Verification OTP", use_container_width=True)
 
-            if signup_btn:
+            if send_signup_otp_btn:
                 if signup_pass != signup_pass_confirm:
                     st.error("Passwords do not match. Please re-enter your password.")
                 else:
-                    success, msg = auth_manager.signup(
+                    success, msg = auth_manager.request_signup_otp(
                         signup_user,
                         signup_pass,
                         signup_name,
@@ -315,9 +317,42 @@ if not st.session_state.authenticated:
                         whatsapp_auto,
                     )
                     if success:
-                        st.success(msg + " You can now log in using your credentials.")
+                        st.session_state["signup_pending_user"] = signup_user
+                        st.session_state["signup_pending_name"] = signup_name
+                        st.session_state["signup_pending_email"] = signup_email
+                        st.session_state["signup_pending_phone"] = signup_phone
+                        st.session_state["signup_otp_sent"] = True
+                        st.success(msg)
                     else:
                         st.error(msg)
+
+        if st.session_state.get("signup_otp_sent", False):
+            st.markdown("---")
+            st.subheader("🔑 Enter Email Verification OTP")
+            pending_user = st.session_state.get("signup_pending_user", "")
+            pending_email = st.session_state.get("signup_pending_email", "")
+            st.caption(f"An OTP verification code was sent to **{pending_email}** for account **@{pending_user}**.")
+
+            with st.form("verify_signup_otp_form"):
+                signup_otp_code = st.text_input("6-Digit OTP Verification Code", key="signup_otp_input")
+                verify_signup_btn = st.form_submit_button("✅ Verify OTP & Create Account", use_container_width=True)
+
+                if verify_signup_btn:
+                    if not signup_otp_code:
+                        st.error("Please enter the 6-digit OTP code sent to your email.")
+                    else:
+                        success, msg = auth_manager.verify_signup_otp_and_create_account(
+                            pending_user,
+                            signup_otp_code,
+                        )
+                        if success:
+                            st.success(msg + " You can now switch to the '🔑 Log In' tab above to sign in.")
+                            # Reset pending signup session state
+                            for k in ["signup_pending_user", "signup_pending_name", "signup_pending_email", "signup_pending_phone", "signup_otp_sent"]:
+                                if k in st.session_state:
+                                    del st.session_state[k]
+                        else:
+                            st.error(msg)
 
     with tab_forgot:
         st.subheader("Forgot Password / Reset with OTP")
