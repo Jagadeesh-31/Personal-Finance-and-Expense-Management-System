@@ -68,8 +68,9 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         return True, "Email logged (offline mode - Set SMTP_USERNAME & SMTP_PASSWORD in .env or Streamlit Secrets)."
 
     try:
-        # Step 3.4: Construct MIME Multipart Email Container with SPF/DKIM aligned headers
+        # Step 3.4: Construct standard RFC-compliant MIME Multipart Email Container
         msg = MIMEMultipart("alternative")
+        msg["MIME-Version"] = "1.0"
         msg["Subject"] = subject
         sender_email = smtp_username if smtp_username else smtp_from
         # Clean From header matching exact SMTP sender to avoid brand spoofing spam flags
@@ -79,10 +80,12 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         msg["Date"] = formatdate(localtime=True)
         # Note: Message-ID header is purposely omitted so Gmail SMTP generates its standard DKIM-signed Message-ID
 
-        # Step 3.5: Attach plain text and optional HTML body parts
-        msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        # Step 3.5: Attach plain text part FIRST, followed by HTML part SECOND (MIME RFC 2046 standard)
+        text_part = MIMEText(body_text, "plain", "utf-8")
+        msg.attach(text_part)
         if body_html:
-            msg.attach(MIMEText(body_html, "html", "utf-8"))
+            html_part = MIMEText(body_html, "html", "utf-8")
+            msg.attach(html_part)
 
         # Step 3.6: Establish TLS encrypted SMTP connection and send email
         with smtplib.SMTP(smtp_server, smtp_port, timeout=12) as server:
