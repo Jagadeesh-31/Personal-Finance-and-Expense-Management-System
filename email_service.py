@@ -72,12 +72,12 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         sender_email = smtp_username if smtp_username else smtp_from
-        msg["From"] = f"Personal Finance App <{sender_email}>"
+        # Clean From header matching exact SMTP sender to avoid brand spoofing spam flags
+        msg["From"] = sender_email
         msg["To"] = to_email
         msg["Reply-To"] = sender_email
         msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid()
-        msg["X-Mailer"] = "PersonalFinanceApp/2.0"
+        # Note: Message-ID header is purposely omitted so Gmail SMTP generates its standard DKIM-signed Message-ID
 
         # Step 3.5: Attach plain text and optional HTML body parts
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
@@ -103,70 +103,51 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str = Non
 # Step 4: Dispatch Welcome Registration Email upon account creation.
 def send_registration_email(to_email: str, username: str) -> tuple[bool, str]:
     """Send welcome email upon new user account creation."""
-    # Step 4.1: Construct registration subject line
-    subject = "Welcome to Personal Finance Management System!"
+    subject = "Welcome to Personal Finance"
 
-    # Step 4.2: Construct plain text welcome body
     body_text = (
         f"Hello {username},\n\n"
-        f"Thank you for registering with Personal Finance Management System!\n"
-        f"Your account '{username}' has been successfully created.\n\n"
-        f"You can now log in to track your income, expenses, and manage your budget.\n\n"
+        f"Welcome to Personal Finance! Your account '{username}' has been created successfully.\n\n"
+        f"You can now log in to manage your budget, income, and expenses.\n\n"
         f"Best regards,\nPersonal Finance Team"
     )
 
-    # Step 4.3: Construct HTML template welcome body
     body_html = f"""
     <html>
-      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
-          <h2 style="color: #2b5876; margin-top: 0;">Welcome to Personal Finance!</h2>
-          <p>Hello <strong>{username}</strong>,</p>
-          <p>Thank you for registering with the Personal Finance Management System. Your account has been successfully created!</p>
-          <div style="background-color: #f4f7f6; padding: 15px; border-left: 4px solid #2b5876; margin: 20px 0;">
-            <p style="margin: 0;"><strong>Username:</strong> {username}</p>
-            <p style="margin: 5px 0 0 0;"><strong>Email:</strong> {to_email}</p>
-          </div>
-          <p>You can now log in to start tracking your income, expenses, and managing your monthly budget.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #888;">If you did not create this account, please ignore this email.</p>
-        </div>
+      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
+        <p>Hello <strong>{username}</strong>,</p>
+        <p>Welcome to Personal Finance! Your account <strong>{username}</strong> has been created successfully.</p>
+        <p>You can now log in to track your income, expenses, and budget.</p>
+        <br>
+        <p>Best regards,<br>Personal Finance Team</p>
       </body>
     </html>
     """
 
-    # Step 4.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)
 
 
 # Step 4.5: Dispatch 6-digit OTP email for Sign-Up Account Verification.
 def send_signup_otp_email(to_email: str, username: str, otp: str) -> tuple[bool, str]:
     """Send sign-up email 6-digit OTP code for account verification."""
-    subject = "Account Sign-Up Verification Code - Personal Finance"
+    subject = "Your Personal Finance Verification Code"
 
     body_text = (
         f"Hello {username},\n\n"
-        f"Thank you for signing up with Personal Finance Management System!\n\n"
-        f"Your account verification code (OTP) is: {otp}\n\n"
-        f"This OTP is valid for 5 minutes. Enter this code in the app to verify your email and complete account creation.\n\n"
-        f"Note: If this email arrived in your Spam folder, please mark it as 'Not Spam' to receive future notifications.\n\n"
+        f"Your verification code for Personal Finance is: {otp}\n\n"
+        f"This code will expire in 5 minutes. Enter this code in the app to complete account registration.\n\n"
         f"Best regards,\nPersonal Finance Team"
     )
 
     body_html = f"""
     <html>
-      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
-          <h2 style="color: #2b5876; margin-top: 0;">Verify Your Email Address</h2>
-          <p>Hello <strong>{username}</strong>,</p>
-          <p>Thank you for registering with Personal Finance! Use the following 6-digit verification code to complete your account setup:</p>
-          <div style="text-align: center; margin: 25px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2b5876; background-color: #eef2f5; padding: 10px 20px; border-radius: 6px;">{otp}</span>
-          </div>
-          <p style="color: #e74c3c;"><strong>Note:</strong> This code is valid for <strong>5 minutes</strong>. Do not share this OTP with anyone.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #666; background-color: #f9f9f9; padding: 8px; border-radius: 4px;">💡 <strong>Tip:</strong> If this email appeared in your Spam or Junk folder, please click <strong>'Report Not Spam'</strong> or move it to your Inbox so you don't miss important financial statements.</p>
-        </div>
+      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
+        <p>Hello <strong>{username}</strong>,</p>
+        <p>Your verification code for Personal Finance is:</p>
+        <h2 style="color: #2b5876; letter-spacing: 4px; background-color: #f4f6f8; padding: 10px 18px; display: inline-block; border-radius: 4px; margin: 10px 0;">{otp}</h2>
+        <p>This code is valid for 5 minutes.</p>
+        <br>
+        <p>Best regards,<br>Personal Finance Team</p>
       </body>
     </html>
     """
@@ -177,38 +158,28 @@ def send_signup_otp_email(to_email: str, username: str, otp: str) -> tuple[bool,
 # Step 5: Dispatch 6-digit OTP email for password reset verification.
 def send_otp_email(to_email: str, username: str, otp: str) -> tuple[bool, str]:
     """Send password reset 6-digit OTP email."""
-    # Step 5.1: Construct OTP subject line without numeric code in subject (prevents spam filtering)
-    subject = "Password Reset Verification Code - Personal Finance"
+    subject = "Your Personal Finance Reset Code"
 
-    # Step 5.2: Construct plain text OTP body
     body_text = (
         f"Hello {username},\n\n"
-        f"We received a request to reset the password for your account '{username}'.\n\n"
-        f"Your One-Time Password (OTP) is: {otp}\n\n"
-        f"This OTP is valid for 5 minutes. Please do not share this code with anyone.\n\n"
+        f"Your password reset verification code is: {otp}\n\n"
+        f"This code will expire in 5 minutes. Please do not share this code with anyone.\n\n"
         f"Best regards,\nPersonal Finance Team"
     )
 
-    # Step 5.3: Construct HTML template OTP body
     body_html = f"""
     <html>
-      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
-          <h2 style="color: #2b5876; margin-top: 0;">Password Reset Request</h2>
-          <p>Hello <strong>{username}</strong>,</p>
-          <p>We received a request to reset your password. Use the following 6-digit One-Time Password (OTP) to proceed:</p>
-          <div style="text-align: center; margin: 25px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2b5876; background-color: #eef2f5; padding: 10px 20px; border-radius: 6px;">{otp}</span>
-          </div>
-          <p style="color: #e74c3c;"><strong>Note:</strong> This OTP is valid for <strong>5 minutes</strong>. Do not share this OTP with anyone.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #888;">If you did not request a password reset, please secure your account immediately.</p>
-        </div>
+      <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
+        <p>Hello <strong>{username}</strong>,</p>
+        <p>Your password reset verification code is:</p>
+        <h2 style="color: #2b5876; letter-spacing: 4px; background-color: #f4f6f8; padding: 10px 18px; display: inline-block; border-radius: 4px; margin: 10px 0;">{otp}</h2>
+        <p>This code is valid for 5 minutes.</p>
+        <br>
+        <p>Best regards,<br>Personal Finance Team</p>
       </body>
     </html>
     """
 
-    # Step 5.4: Trigger email dispatch
     return send_email(to_email, subject, body_text, body_html)
 
 
