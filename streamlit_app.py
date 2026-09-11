@@ -2,8 +2,11 @@ import base64
 import io
 import os
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
+
 from logger_config import get_logger
 from auth import UserManager
 from email_service import send_monthly_report_email
@@ -254,6 +257,310 @@ def display_table(dataframe):
     st.dataframe(displayed, use_container_width=True)
 
 
+def render_category_expense_visuals(expense_df: pd.DataFrame):
+    """Render category-wise expense metric summary cards, interactive Plotly bar chart, and donut/pie chart."""
+    if expense_df.empty or "amount" not in expense_df.columns or "category" not in expense_df.columns:
+        st.info("ℹ️ No expense transactions recorded yet. Add expenses via option '2. Add Expense' to view live analytics.")
+        st.caption("💡 **Sample Visual Demonstration** (Placeholder preview chart until real data is added):")
+        sample_df = pd.DataFrame([
+            {"category": "Rent & Housing", "amount": 12000.0},
+            {"category": "Food & Dining", "amount": 4500.0},
+            {"category": "Bills & Utilities", "amount": 2500.0},
+            {"category": "Shopping & Clothing", "amount": 1800.0},
+            {"category": "Transport / Fuel", "amount": 1200.0},
+        ])
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_bar_sample = px.bar(
+                sample_df,
+                x="category",
+                y="amount",
+                color="category",
+                text="amount",
+                title="📊 Sample Category Expense Bar Chart",
+                labels={"amount": f"Amount ({CURRENCY})", "category": "Category"},
+                color_discrete_sequence=px.colors.qualitative.Set3,
+            )
+            fig_bar_sample.update_traces(texttemplate=f"{CURRENCY} %{{y:,.2f}}", textposition="outside")
+            fig_bar_sample.update_layout(showlegend=False, xaxis_title="", yaxis_title=f"Total ({CURRENCY})", margin=dict(t=40, b=40, l=20, r=20))
+            st.plotly_chart(fig_bar_sample, use_container_width=True)
+
+        with col2:
+            fig_pie_sample = px.pie(
+                sample_df,
+                names="category",
+                values="amount",
+                title="🍩 Sample Category Expense Pie Chart",
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Set3,
+            )
+            fig_pie_sample.update_traces(textinfo="percent+label")
+            fig_pie_sample.update_layout(margin=dict(t=40, b=40, l=20, r=20))
+            st.plotly_chart(fig_pie_sample, use_container_width=True)
+        return
+
+    # Process and aggregate expense data
+    cat_summary = (
+        expense_df.groupby("category")["amount"]
+        .sum()
+        .reset_index()
+        .sort_values(by="amount", ascending=False)
+    )
+
+    if cat_summary.empty or cat_summary["amount"].sum() <= 0:
+        st.info("ℹ️ Total expenses are zero. Add non-zero expense amounts to visualize categories.")
+        return
+
+    total_exp = float(cat_summary["amount"].sum())
+    top_cat = str(cat_summary.iloc[0]["category"])
+    top_amt = float(cat_summary.iloc[0]["amount"])
+    top_pct = (top_amt / total_exp) * 100.0 if total_exp > 0 else 0.0
+
+    # Summary KPI Metric Cards
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Expenses", f"{CURRENCY} {total_exp:,.2f}")
+    m2.metric("Highest Expense Category", f"{top_cat}", delta=f"{CURRENCY} {top_amt:,.2f} ({top_pct:.1f}%)")
+    m3.metric("Total Expense Categories", f"{len(cat_summary)}")
+
+    st.markdown("---")
+
+    # Side-by-Side Visualizations (Bar Chart & Donut/Pie Chart)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 📊 Expense Bar Chart by Category")
+        fig_bar = px.bar(
+            cat_summary,
+            x="category",
+            y="amount",
+            color="category",
+            text="amount",
+            labels={"amount": f"Amount ({CURRENCY})", "category": "Category"},
+            color_discrete_sequence=px.colors.qualitative.Bold,
+        )
+        fig_bar.update_traces(
+            texttemplate=f"{CURRENCY} %{{y:,.2f}}",
+            textposition="outside",
+            hovertemplate=f"<b>Category:</b> %{{x}}<br><b>Total Spent:</b> {CURRENCY} %{{y:,.2f}}<extra></extra>",
+        )
+        fig_bar.update_layout(
+            showlegend=False,
+            xaxis_title="",
+            yaxis_title=f"Total ({CURRENCY})",
+            margin=dict(t=30, b=40, l=20, r=20),
+            height=420,
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    with col2:
+        st.markdown("#### 🍩 Category Expense Distribution (Pie Chart)")
+        fig_pie = px.pie(
+            cat_summary,
+            names="category",
+            values="amount",
+            hole=0.45,
+            color_discrete_sequence=px.colors.qualitative.Bold,
+        )
+        fig_pie.update_traces(
+            textinfo="percent+label",
+            hovertemplate=f"<b>Category:</b> %{{label}}<br><b>Amount:</b> {CURRENCY} %{{value:,.2f}}<br><b>Share:</b> %{{percent}}<extra></extra>",
+        )
+        fig_pie.update_layout(
+            margin=dict(t=30, b=40, l=20, r=20),
+            height=420,
+            legend=dict(orientation="h", y=-0.1),
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+
+def render_financial_summary_visuals(
+    income_total: float,
+    expense_total: float,
+    savings_total: float,
+    current_budget: float,
+    income_df: pd.DataFrame,
+    expense_df: pd.DataFrame,
+):
+    """Render comprehensive interactive charts and pie charts for the Financial Summary screen."""
+    st.markdown("---")
+    st.markdown("### 📈 Visual Financial Dashboard & Analytics")
+
+    # Row 1: Key Financial Comparison Bar Chart & Income Allocation Donut
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 📊 Financial Summary Comparison")
+        summary_bar_df = pd.DataFrame([
+            {"Metric": "Income", "Amount": income_total},
+            {"Metric": "Expense", "Amount": expense_total},
+            {"Metric": "Savings", "Amount": max(savings_total, 0.0)},
+            {"Metric": "Budget", "Amount": current_budget},
+        ])
+        fig_summary = px.bar(
+            summary_bar_df,
+            x="Metric",
+            y="Amount",
+            color="Metric",
+            text="Amount",
+            color_discrete_map={
+                "Income": "#16a34a",
+                "Expense": "#dc2626",
+                "Savings": "#2563eb",
+                "Budget": "#9333ea",
+            },
+        )
+        fig_summary.update_traces(
+            texttemplate=f"{CURRENCY} %{{y:,.2f}}",
+            textposition="outside",
+            hovertemplate=f"<b>%{{x}}:</b> {CURRENCY} %{{y:,.2f}}<extra></extra>",
+        )
+        fig_summary.update_layout(
+            showlegend=False,
+            xaxis_title="",
+            yaxis_title=f"Amount ({CURRENCY})",
+            margin=dict(t=30, b=40, l=20, r=20),
+            height=380,
+        )
+        st.plotly_chart(fig_summary, use_container_width=True)
+
+    with col2:
+        st.markdown("#### 🥧 Income vs Expense Breakdown (Pie Chart)")
+        if income_total > 0:
+            spent = min(expense_total, income_total)
+            saved = max(income_total - spent, 0.0)
+            alloc_df = pd.DataFrame([
+                {"Category": "Spent (Expenses)", "Amount": spent},
+                {"Category": "Saved (Net Savings)", "Amount": saved},
+            ])
+            fig_alloc = px.pie(
+                alloc_df,
+                names="Category",
+                values="Amount",
+                hole=0.45,
+                color="Category",
+                color_discrete_map={"Spent (Expenses)": "#ef4444", "Saved (Net Savings)": "#10b981"},
+            )
+            fig_alloc.update_traces(
+                textinfo="percent+label",
+                hovertemplate=f"<b>%{{label}}:</b> {CURRENCY} %{{value:,.2f}}<br><b>Share:</b> %{{percent}}<extra></extra>",
+            )
+            fig_alloc.update_layout(margin=dict(t=30, b=40, l=20, r=20), height=380)
+            st.plotly_chart(fig_alloc, use_container_width=True)
+        else:
+            # Sample preview pie chart for zero-income state
+            st.info("ℹ️ Add income entries to activate your live Income Allocation pie chart.")
+            sample_alloc = pd.DataFrame([
+                {"Category": "Estimated Expenses (60%)", "Amount": 6000},
+                {"Category": "Target Savings (40%)", "Amount": 4000},
+            ])
+            fig_alloc_sample = px.pie(
+                sample_alloc,
+                names="Category",
+                values="Amount",
+                hole=0.45,
+                color_discrete_sequence=["#cbd5e1", "#94a3b8"],
+            )
+            fig_alloc_sample.update_traces(textinfo="percent+label")
+            fig_alloc_sample.update_layout(margin=dict(t=30, b=40, l=20, r=20), height=380)
+            st.plotly_chart(fig_alloc_sample, use_container_width=True)
+
+    st.markdown("---")
+
+    # Row 2: Category Expense Breakdown Pie Chart & Monthly Spending Trend
+    col3, col4 = st.columns(2)
+
+    with col3:
+        st.markdown("#### 🍰 Expense Category Pie Chart")
+        if not expense_df.empty and "amount" in expense_df.columns and "category" in expense_df.columns:
+            cat_summary = expense_df.groupby("category")["amount"].sum().reset_index()
+            if cat_summary["amount"].sum() > 0:
+                fig_cat_pie = px.pie(
+                    cat_summary,
+                    names="category",
+                    values="amount",
+                    hole=0.35,
+                    color_discrete_sequence=px.colors.qualitative.Pastel,
+                )
+                fig_cat_pie.update_traces(
+                    textinfo="percent+label",
+                    hovertemplate=f"<b>Category:</b> %{{label}}<br><b>Total:</b> {CURRENCY} %{{value:,.2f}}<br><b>Percentage:</b> %{{percent}}<extra></extra>",
+                )
+                fig_cat_pie.update_layout(margin=dict(t=30, b=40, l=20, r=20), height=380)
+                st.plotly_chart(fig_cat_pie, use_container_width=True)
+            else:
+                st.info("ℹ️ Expenses recorded total zero. Add non-zero expense values to view breakdown.")
+        else:
+            st.info("ℹ️ No expenses logged yet. Displaying sample category pie chart preview:")
+            sample_cats = pd.DataFrame([
+                {"Category": "Food & Dining", "Amount": 3500},
+                {"Category": "Shopping", "Amount": 2000},
+                {"Category": "Utilities", "Amount": 1500},
+            ])
+            fig_sample_cat = px.pie(
+                sample_cats,
+                names="Category",
+                values="Amount",
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+            )
+            fig_sample_cat.update_layout(margin=dict(t=30, b=40, l=20, r=20), height=380)
+            st.plotly_chart(fig_sample_cat, use_container_width=True)
+
+    with col4:
+        st.markdown("#### 📉 Daily/Monthly Spending Trend Line Chart")
+        if not expense_df.empty and "date" in expense_df.columns and "amount" in expense_df.columns:
+            trend_df = expense_df.copy()
+            trend_df["parsed_date"] = pd.to_datetime(trend_df["date"], errors="coerce")
+            trend_df = trend_df.dropna(subset=["parsed_date"])
+            trend_df = (
+                trend_df.groupby("parsed_date")["amount"]
+                .sum()
+                .reset_index()
+                .sort_values("parsed_date")
+            )
+            if not trend_df.empty:
+                fig_trend = px.line(
+                    trend_df,
+                    x="parsed_date",
+                    y="amount",
+                    markers=True,
+                    labels={"amount": f"Amount ({CURRENCY})", "parsed_date": "Date"},
+                )
+                fig_trend.update_traces(
+                    line_color="#e11d48",
+                    line_width=3,
+                    marker=dict(size=8, color="#be123c"),
+                    hovertemplate=f"<b>Date:</b> %{{x|%Y-%m-%d}}<br><b>Daily Spent:</b> {CURRENCY} %{{y:,.2f}}<extra></extra>",
+                )
+                fig_trend.update_layout(
+                    margin=dict(t=30, b=40, l=20, r=20),
+                    xaxis_title="Transaction Date",
+                    yaxis_title=f"Amount ({CURRENCY})",
+                    height=380,
+                )
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.info("ℹ️ Spending timeline requires valid transaction dates.")
+        else:
+            st.info("ℹ️ Add expense records with dates to unlock live spending trend lines.")
+            sample_trend = pd.DataFrame([
+                {"date": "Day 1", "amount": 500},
+                {"date": "Day 5", "amount": 1200},
+                {"date": "Day 10", "amount": 800},
+                {"date": "Day 15", "amount": 2100},
+                {"date": "Day 20", "amount": 650},
+            ])
+            fig_sample_trend = px.line(
+                sample_trend,
+                x="date",
+                y="amount",
+                markers=True,
+                color_discrete_sequence=["#f43f5e"],
+            )
+            fig_sample_trend.update_layout(margin=dict(t=30, b=40, l=20, r=20), height=380)
+            st.plotly_chart(fig_sample_trend, use_container_width=True)
+
+
+
 # Step 7: Configure Streamlit page layout and authentication session state.
 st.set_page_config(page_title="Personal Finance Manager", page_icon="💼", layout="wide")
 
@@ -485,7 +792,7 @@ menu = []
 for index, label in enumerate(menu_items, start=1):
     menu.append(f"{index}. {label}")
 
-choice = st.sidebar.radio("Select an option", menu)
+choice = st.sidebar.radio("Select an option", menu, index=12)
 
 # Step 9: Initialize storage directory and files.
 ensure_data_files()
@@ -703,24 +1010,60 @@ elif choice == "8. Transaction History":
 
 # Step 10.9: Category-wise Expense Chart and Summary Handler
 elif choice == "9. Category Wise Expenses":
-    df = load_expenses()
-    if df.empty:
-        st.info("No expense data available.")
-    else:
-        category_summary = df.groupby("category")["amount"].sum().sort_values(ascending=False)
-        st.bar_chart(category_summary)
-        display_table(category_summary.reset_index().rename(columns={"amount": "total_amount"}))
+    st.subheader("📁 Category Wise Expense Analytics & Breakdown")
+    exp_df = load_expenses()
+    render_category_expense_visuals(exp_df)
+    if not exp_df.empty and "category" in exp_df.columns and "amount" in exp_df.columns:
+        st.markdown("---")
+        st.markdown("#### 📋 Category Summary Table")
+        category_summary = (
+            exp_df.groupby("category")["amount"]
+            .sum()
+            .reset_index()
+            .rename(columns={"amount": "total_amount"})
+            .sort_values(by="total_amount", ascending=False)
+        )
+        display_table(category_summary)
 
 # Step 10.10: Monthly Savings Metric Handler
 elif choice == "10. Monthly Savings":
+    st.subheader("💰 Monthly Savings Visual Tracker")
     income_total = total_income()
     expense_total = total_expense()
     savings = income_total - expense_total
-    st.metric("Monthly Savings", f"{CURRENCY} {savings:,.2f}")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Income", f"{CURRENCY} {income_total:,.2f}")
+    col2.metric("Total Expenses", f"{CURRENCY} {expense_total:,.2f}")
+    col3.metric("Net Monthly Savings", f"{CURRENCY} {savings:,.2f}", delta=f"{CURRENCY} {savings:,.2f}")
+
     if savings >= 0:
-        st.success("You are saving positive money this month.")
+        st.success("🎉 You are saving positive money this month.")
     else:
-        st.warning("Your expenses are above your income.")
+        st.warning("⚠️ Your expenses exceed your income. Consider reviewing high-spending categories.")
+
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=max(savings, 0.0),
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': f"Monthly Savings Progress ({CURRENCY})"},
+        delta={'reference': income_total * 0.2 if income_total > 0 else 1000},
+        gauge={
+            'axis': {'range': [None, max(income_total, 10000.0)]},
+            'bar': {'color': "#10b981"},
+            'steps': [
+                {'range': [0, max(income_total * 0.3, 3000)], 'color': "#fee2e2"},
+                {'range': [max(income_total * 0.3, 3000), max(income_total * 0.7, 7000)], 'color': "#fef3c7"},
+            ],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': max(income_total, 1.0),
+            }
+        }
+    ))
+    fig_gauge.update_layout(height=350, margin=dict(t=50, b=20, l=20, r=20))
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
 # Step 10.11: Highest Expense Detail View Handler
 elif choice == "11. Highest Expense":
@@ -742,7 +1085,7 @@ elif choice == "12. Monthly Financial Report":
     income_total = total_income()
     expense_total = total_expense()
     savings = income_total - expense_total
-    st.subheader("Monthly Financial Report")
+    st.subheader("📋 Monthly Financial Report & Visual Breakdown")
     report = pd.DataFrame(
         {
             "Metric": ["Total Income", "Total Expense", "Savings"],
@@ -751,8 +1094,15 @@ elif choice == "12. Monthly Financial Report":
     )
     display_table(report)
 
+    inc_df = load_income()
+    exp_df = load_expenses()
+    bdg_df = load_budget()
+    budget_tot = float(bdg_df["budget"].sum()) if not bdg_df.empty else 0.0
+    render_financial_summary_visuals(income_total, expense_total, savings, budget_tot, inc_df, exp_df)
+
 # Step 10.13: Dashboard Key Metrics Summary Handler
 elif choice == "13. Financial Summary":
+    st.subheader("💼 Financial Overview & Visual Summary")
     income_total = total_income()
     expense_total = total_expense()
     savings = monthly_savings_value()
@@ -764,6 +1114,11 @@ elif choice == "13. Financial Summary":
     col2.metric("Expense", f"{CURRENCY} {expense_total:,.2f}")
     col3.metric("Savings", f"{CURRENCY} {savings:,.2f}")
     col4.metric("Budget", f"{CURRENCY} {current_budget:,.2f}")
+
+    inc_df = load_income()
+    exp_df = load_expenses()
+    render_financial_summary_visuals(income_total, expense_total, savings, current_budget, inc_df, exp_df)
+
 
 # Step 10.14: Keyword Search Handler across Income and Expense records
 elif choice == "14. Search Transactions":
@@ -816,17 +1171,25 @@ elif choice == "16. Delete Expense":
 
 # Step 10.17: Savings Goal Checker Handler
 elif choice == "17. Savings Goal":
-    goal = st.number_input("Set savings goal", value=None, min_value=0.0, step=500.0, placeholder="Enter target savings goal")
+    st.subheader("🎯 Savings Goal Tracker")
+    goal = st.number_input("Set monthly savings goal", value=None, min_value=0.0, step=500.0, placeholder="Enter target savings goal")
     current_savings = monthly_savings_value()
-    if st.button("Check Goal"):
+    
+    st.caption(f"Current Monthly Net Savings: **{CURRENCY} {current_savings:,.2f}** (Income: {CURRENCY} {total_income():,.2f} | Expense: {CURRENCY} {total_expense():,.2f})")
+    
+    if st.button("Check Goal", use_container_width=True):
         if goal is None or goal <= 0:
             st.error("Please enter a valid savings goal amount greater than 0.")
         else:
+            pct = max(min((current_savings / goal) * 100.0, 100.0), 0.0) if goal > 0 else 0.0
+            st.progress(pct / 100.0)
+            
             if current_savings >= goal:
-                st.success(f"Goal reached. Current savings: {CURRENCY} {current_savings:,.2f}")
+                st.success(f"🎉 Goal reached! Current net savings ({CURRENCY} {current_savings:,.2f}) meet or exceed your target of {CURRENCY} {goal:,.2f}.")
             else:
                 remaining = goal - current_savings
-                st.warning(f"Goal not reached. Remaining amount: {CURRENCY} {remaining:,.2f}")
+                st.warning(f"⚠️ Goal not reached yet. Remaining target to save: **{CURRENCY} {remaining:,.2f}** (Target: {CURRENCY} {goal:,.2f} | Current Savings: {CURRENCY} {current_savings:,.2f}).")
+
 
 # Step 10.18: Export Multi-Sheet Excel Financial Report Handler
 elif choice == "18. Export Financial Report":
