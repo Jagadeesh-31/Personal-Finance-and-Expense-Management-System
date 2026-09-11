@@ -1,123 +1,136 @@
-# Personal Finance Management System
+# 💼 Personal Finance Management System
 
-A Python application for recording income and expenses, managing monthly budgets, and generating financial reports.
+A comprehensive Python and Streamlit web application for tracking income & expenses, managing monthly budgets, visualizing financial data with interactive Plotly graphs & pie charts, and automating WhatsApp & email report delivery.
 
-## Features
+---
 
-- User Authentication (Sign Up & Log In with PBKDF2 HMAC SHA-256 password hashing)
-- Multi-user data isolation and personalized tracking per account
-- Add and view income records
-- Add and view expense records
-- Expense categories and payment methods
-- Monthly budgets with CSV persistence
-- Budget validation and remaining-budget calculation
-- Transaction history
-- Category-wise expense totals
-- Monthly savings calculation
-- Highest-expense identification
-- Monthly financial reports
-- Financial summary
-- Streamlit dashboard with authentication portal, search, delete, savings goal, and Excel export
-- WhatsApp Integration: Interactive WhatsApp Web pre-filled sharing (`wa.me`) & automated direct delivery via Meta WhatsApp Cloud API
-- Smart WhatsApp Content: Dispatches full financial reports for active months and automated reminder alerts (*"You did not record any income/expenses this month"*) for empty months
-- Dual Triggers: Automatic monthly completion dispatch & instant trigger on "Export Report" button click
-- Centralized logging & Pytest automated test suite
-- Transaction tables with row numbers starting at 1
+## ✨ Features
 
+### 📊 Interactive Visual Analytics & Charts (Plotly)
+- **Financial Summary Dashboard**: 4 key KPI metric cards (*Income*, *Expense*, *Savings*, *Budget*) paired with:
+  - **Financial Overview Bar Chart**: Color-coded comparison of Income, Expenses, Savings, and Budget.
+  - **Income Allocation Pie Chart**: Visual breakdown of Income Spent vs Net Savings.
+  - **Category Expense Pie Chart**: Interactive donut/pie chart displaying category spending shares.
+  - **Daily Spending Trend Line Chart**: Tracks daily/monthly expense trajectory over time.
+- **Category Wise Expense Analytics**:
+  - **KPI Summary Cards**: Total Expenses, Highest Expense Category (% share), and Active Categories.
+  - **Side-by-Side Visualizations**: Plotly Bar Chart (amount by category) + Donut/Pie Chart (percentage distribution).
+- **Savings Goal Tracker**: Interactive target checker with a visual progress bar and remaining savings calculation.
+- **Monthly Savings Visual Progress Bar**: Visual gauge meter tracking monthly savings targets.
 
-## WhatsApp Configuration & Automated Scheduler
+### 🔐 User Authentication & 2FA Security
+- **Secure Password Hashing**: Passwords encrypted using **PBKDF2 HMAC SHA-256** with 32-character random salts.
+- **Multi-User Data Isolation**: Personalized private CSV storage directories per account.
+- **Email & WhatsApp 2FA OTP Verification**: 6-digit OTP verification for email address updates and WhatsApp phone number changes.
+- **Profile Picture Management**: Upload custom profile avatars (PNG, JPG, WEBP).
 
-### 1. Interactive WhatsApp Sharing (100% Free)
-Click the **"📲 Share Report via WhatsApp Web Link"** button in the Streamlit app to open WhatsApp Web or Mobile with your pre-filled report or reminder alert.
+### 📲 WhatsApp & Email Automated Delivery
+- **Interactive WhatsApp Web Sharing (100% Free)**: One-click pre-filled WhatsApp Web link dispatch (`wa.me`).
+- **Meta WhatsApp Cloud API**: Automated direct background message delivery.
+- **Automated Monthly Scheduler**: `monthly_scheduler.py` background worker for automated dispatch.
+- **Email Report Delivery**: Automated financial breakdown reports dispatched to registered email addresses.
 
-### 2. Meta WhatsApp Cloud API (Automated Direct Messaging)
-To enable background direct messaging:
-1. Copy `.env.example` to `.env`.
-2. Add your Meta WhatsApp API Token and Sender Phone Number ID:
+### 📊 Data Management & Reports
+- **Interactive Data Editors**: Modify income, expenses, and budgets in real time via Streamlit `st.data_editor`.
+- **Multi-Sheet Excel Export**: Generates `.xlsx` reports with separate sheets for *Income*, *Expenses*, *Budget*, *Transactions*, *Category Expenses*, and *Summary*.
+- **Keyword Search & Row Deletion**: Search transactions across all fields or safely delete entries.
+- **Automated PyTest Suite**: 33 unit tests covering finance logic, authentication, OTP security, WhatsApp service, and logging.
+
+---
+
+## 🛠️ Technology Stack
+
+- **Frontend & App Framework**: Streamlit
+- **Visualizations & Charts**: Plotly Express & Plotly Graph Objects
+- **Data Processing**: Pandas
+- **Export Engine**: OpenPyXL (Excel)
+- **Authentication & Security**: PBKDF2 HMAC SHA-256
+- **Automated Testing**: PyTest
+
+---
+
+## 💻 Installation & Setup
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/jagadeesh-boyalla-03/Personal-Finance-and-Expense-Management-System.git
+   cd Personal-Finance-and-Expense-Management-System
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure Environment Variables (Optional for Meta API & Email)**:
+   Copy `.env.example` to `.env` and fill in your details:
    ```env
    META_WHATSAPP_TOKEN=your_meta_token_here
    META_PHONE_NUMBER_ID=your_meta_phone_number_id_here
+   SMTP_EMAIL=your_email@gmail.com
+   SMTP_PASSWORD=your_app_password
    ```
 
-### 3. Automated Monthly Background Dispatcher
-To run the automated monthly WhatsApp dispatch for all registered accounts:
-```bash
-python monthly_scheduler.py
-```
+---
 
-- Python 3.11 or later
-- pandas
-- streamlit
-- openpyxl for Excel report export
+## 🚀 Running the Application
 
-## Installation
-
-Open a terminal in the project folder and run:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Run the Console Application
-
-```bash
-python main.py
-```
-
-The console menu provides options for income, expenses, budgets, history, savings, category analysis, highest expense, reports, and summary.
-
-## Run the Streamlit Application
-
+### Launch Streamlit Dashboard (Recommended)
 ```bash
 streamlit run streamlit_app.py
 ```
 
-Open the URL shown in the terminal. The Streamlit application provides the complete visual dashboard and report features.
+### Run Console Terminal App
+```bash
+python main.py
+```
 
-## Run the Desktop GUI Application
-
+### Run Desktop GUI App (Tkinter)
 ```bash
 python gui/gui_app.py
 ```
 
-The desktop GUI provides an offline dashboard for tracking transactions and summary cards.
+### Run Automated Monthly WhatsApp Scheduler
+```bash
+python monthly_scheduler.py
+```
 
-## Data Storage
+---
 
-Application data is stored in the `data` folder:
+## 🧪 Running Automated Tests
 
-- `income.csv` stores income records.
-- `expenses.csv` stores expense records.
-- `transactions.csv` stores transaction history for the console application.
-- `budgets.csv` stores monthly console budgets.
-- `budget.csv` stores Streamlit monthly budgets.
+Run the complete 33-test PyTest suite:
+```bash
+python -m pytest
+```
 
-Generated financial reports are saved in the project folder.
+---
 
-## Monthly Calculations
-
-Monthly reports use the `YYYY-MM` format, for example `2026-08`.
+## 📁 Project Architecture
 
 ```text
-Monthly Savings = Monthly Income - Monthly Expenses
-Remaining Budget = Monthly Budget - Monthly Expenses
+├── streamlit_app.py       # Main Streamlit Web Application with Plotly Charts
+├── auth.py                # User Authentication & 2FA OTP Management
+├── finance.py             # Core Finance Data Engine & CSV Storage
+├── email_service.py       # Email Delivery Engine (SMTP)
+├── whatsapp_service.py    # WhatsApp Web Link & Meta Cloud API Dispatcher
+├── monthly_scheduler.py   # Background Monthly Automated Dispatcher
+├── logger_config.py       # Logging Configuration & Rotating File Handlers
+├── main.py                # Console Terminal Entry Point
+├── gui/
+│   └── gui_app.py         # Tkinter Offline Desktop Application
+├── tests/                 # Automated PyTest Test Suite (33 Tests)
+│   ├── test_auth.py
+│   ├── test_finance.py
+│   ├── test_profile_otp.py
+│   ├── test_whatsapp.py
+│   ├── test_report.py
+│   └── test_logger.py
+├── requirements.txt       # Python Dependencies
+└── README.md              # Project Documentation
 ```
 
-## Project Files
+---
 
-- `finance.py`: Transaction classes, CSV storage, calculations, and validation.
-- `report.py`: Console financial report generation.
-- `main.py`: Console menu and application entry point.
-- `streamlit_app.py`: Streamlit dashboard.
-- `gui/gui_app.py`: Tkinter desktop transaction dashboard.
-- `requirements.txt`: Python dependencies.
-
-## Troubleshooting
-
-If Excel export reports that `openpyxl` is missing, run:
-
-```bash
-python -m pip install openpyxl
-```
-
-Then restart Streamlit.
+## 📄 License
+This project is open-source and available under the MIT License.
